@@ -45,6 +45,15 @@ struct kernel_thread_frame
     void *aux;                  /* Auxiliary data for function. */
   };
 
+/* Element structure for integer lists. 
+   
+   SS */
+struct int_element
+  {
+    int value;                  /* Integer element value.*/
+    struct list_elem int_elem;  /* Integer list element. */
+  };
+
 /* Statistics. */
 static long long idle_ticks;    /* # of timer ticks spent idle. */
 static long long kernel_ticks;  /* # of timer ticks in kernel threads. */
@@ -75,15 +84,25 @@ static tid_t allocate_tid (void);
    than thread 'b', else false. 
    
    HH SS */
-static bool
-compare_thread_by_priority(const struct list_elem *a,
-                           const struct list_elem *b, 
-                           void *aux UNUSED)
+bool
+cmp_priority(const struct list_elem *a, const struct list_elem *b, 
+             void *aux UNUSED)
 {
   const struct thread *t_a = list_entry(a, struct thread, elem);
   const struct thread *t_b = list_entry(b, struct thread, elem);
 
   return t_a->effective_priority > t_b->effective_priority;
+}
+
+/* Updates effective priority of currently running thread,
+   and yields if new max priority is less than next ready
+   thread's running priority.
+   
+   HH SS*/
+void
+update_effective_priority () {
+  /* Check donated priority list */
+
 }
 
 /* Initializes the threading system by transforming the code
@@ -185,8 +204,8 @@ thread_print_stats (void)
    PRIORITY, but no actual priority scheduling is implemented.
    Priority scheduling is the goal of Problem 1-3. */
 tid_t
-thread_create (const char *name, int priority,
-               thread_func *function, void *aux) 
+thread_create (const char *name, int priority, thread_func *function,
+               void *aux) 
 {
   struct thread *t;
   struct kernel_thread_frame *kf;
@@ -228,6 +247,9 @@ thread_create (const char *name, int priority,
 
   intr_set_level (old_level);
 
+  /* Initialize the donated priorities list. */
+  list_init(&initial_thread->donated_priorities);
+
   /* Add to run queue. */
   thread_unblock (t);
 
@@ -267,10 +289,16 @@ thread_unblock (struct thread *t)
 
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
-  list_insert_ordered(&ready_list, &t->elem, *compare_thread_by_priority, NULL);
+  list_insert_ordered(&ready_list, &t->elem, *cmp_priority, NULL);
   // list_push_back (&ready_list, &t->elem);
   t->status = THREAD_READY;
   intr_set_level (old_level);
+  
+  update_effective_priority ();
+  /* Compare effective priorities of running thread and newly inserted
+     thread. Yield running thread if current thread has lower priority. */
+  if (thread_current ()->effective_priority < t->effective_priority)
+    thread_yield ();
 }
 
 /* Returns the name of the running thread. */
@@ -339,7 +367,7 @@ thread_yield (void)
 
   old_level = intr_disable ();
   if (cur != idle_thread) 
-    list_insert_ordered (&ready_list, &cur->elem, *compare_thread_by_priority, NULL); 
+    list_insert_ordered (&ready_list, &cur->elem, *cmp_priority, NULL); 
     // list_push_back (&ready_list, &cur->elem);
   cur->status = THREAD_READY;
   schedule ();
@@ -372,11 +400,16 @@ thread_set_priority (int new_priority)
   {
     cur->priority = new_priority;
     cur->effective_priority = new_priority;
-    /* Check if new_priority is less than priority of
-       front of ready_list.  */
+
+    /* TODO: Need to change donated priorities somehow.
+             By checking effective priority is donated?? */
+
+    /* Check if new_priority is less than priority of front 
+       of ready_list.  */
     struct list_elem *front_elem = list_front (&ready_list);
-    struct thread *t_front = list_entry (front_elem, struct thread, elem);
-    if (t_front->effective_priority > cur->effective_priority)
+    struct thread *t_front = list_entry (front_elem, 
+                                         struct thread, elem);
+    if (cur->effective_priority < t_front->effective_priority)
       thread_yield ();
   } else    // If invalid priority - set to default priority
   {
