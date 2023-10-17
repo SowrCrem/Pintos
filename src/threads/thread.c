@@ -45,6 +45,15 @@ struct kernel_thread_frame
     void *aux;                  /* Auxiliary data for function. */
   };
 
+/* Element structure for integer lists. 
+   
+   SS */
+struct int_element
+  {
+    int value;                  /* Integer element value.*/
+    struct list_elem int_elem;  /* Integer list element. */
+  };
+
 /* Statistics. */
 static long long idle_ticks;    /* # of timer ticks spent idle. */
 static long long kernel_ticks;  /* # of timer ticks in kernel threads. */
@@ -83,6 +92,17 @@ cmp_priority(const struct list_elem *a, const struct list_elem *b,
   const struct thread *t_b = list_entry(b, struct thread, elem);
 
   return t_a->effective_priority > t_b->effective_priority;
+}
+
+/* Updates effective priority of currently running thread,
+   and yields if new max priority is less than next ready
+   thread's running priority.
+   
+   HH SS*/
+void
+update_effective_priority () {
+  /* Check donated priority list */
+
 }
 
 /* Initializes the threading system by transforming the code
@@ -196,8 +216,8 @@ thread_print_stats (void)
    PRIORITY, but no actual priority scheduling is implemented.
    Priority scheduling is the goal of Problem 1-3. */
 tid_t
-thread_create (const char *name, int priority,
-               thread_func *function, void *aux) 
+thread_create (const char *name, int priority, thread_func *function,
+               void *aux) 
 {
   struct thread *t;
   struct kernel_thread_frame *kf;
@@ -238,6 +258,9 @@ thread_create (const char *name, int priority,
   sf->ebp = 0;
 
   intr_set_level (old_level);
+
+  /* Initialize the donated priorities list. */
+  list_init(&initial_thread->donated_priorities);
 
   /* Add to run queue. */
   thread_unblock (t);
@@ -359,6 +382,7 @@ thread_yield (void)
 
   old_level = intr_disable ();
   if (cur != idle_thread) 
+    list_insert_ordered (&ready_list, &cur->elem, *cmp_priority, NULL); 
     list_insert_ordered (&ready_list, &cur->elem, *cmp_priority, NULL); 
     // list_push_back (&ready_list, &cur->elem);
   cur->status = THREAD_READY;

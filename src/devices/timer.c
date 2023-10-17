@@ -115,7 +115,7 @@ timer_sleep (int64_t ticks)
 
   /*Insert sleep_sema element into sleepingList*/
   lock_acquire(&sleeplist_lock);
-  list_insert_ordered(&sleepingList, &(sleep_sema.list_elem), thread_wakeup_less, NULL);
+  list_insert_ordered(&sleepingList, &sleep_sema.list_elem, thread_wakeup_less, NULL);
   lock_release(&sleeplist_lock);
  
   sema_down(&(sleep_sema.semaphore));
@@ -207,7 +207,7 @@ timer_interrupt (struct intr_frame *args UNUSED)
     struct sleep_sema *sleeping_thread = list_entry (sleep_elem, struct sleep_sema, list_elem);
   
      /*Pop sleep_sema from list if ready to wakeup*/ 
-    if ((sleeping_thread->wakeup_time) <= (ticks))
+    if (sleeping_thread->wakeup_time <= ticks)
     {
       struct list_elem *sleep_elem = list_pop_front (&sleepingList);
       struct sleep_sema *sleeping_thread = list_entry (sleep_elem, struct sleep_sema, list_elem);
