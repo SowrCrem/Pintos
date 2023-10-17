@@ -75,10 +75,9 @@ static tid_t allocate_tid (void);
    than thread 'b', else false. 
    
    HH SS */
-static bool
-compare_thread_by_priority(const struct list_elem *a,
-                           const struct list_elem *b, 
-                           void *aux UNUSED)
+bool
+cmp_priority(const struct list_elem *a, const struct list_elem *b, 
+             void *aux UNUSED)
 {
   const struct thread *t_a = list_entry(a, struct thread, elem);
   const struct thread *t_b = list_entry(b, struct thread, elem);
@@ -113,6 +112,18 @@ thread_init (void)
   init_thread (initial_thread, "main", PRI_DEFAULT);
   initial_thread->status = THREAD_RUNNING;
   initial_thread->tid = allocate_tid ();
+
+
+
+  /* 
+      
+        TESTING PURPOSES - TURN OFF MLFQS. 
+  
+    to make MLFQS tests fail faster
+  
+  */
+  thread_mlfqs = false;
+
 }
 
 /* Starts preemptive thread scheduling by enabling interrupts.
@@ -267,10 +278,19 @@ thread_unblock (struct thread *t)
 
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
-  list_insert_ordered(&ready_list, &t->elem, *compare_thread_by_priority, NULL);
+  list_insert_ordered(&ready_list, &t->elem, *cmp_priority, NULL);
   // list_push_back (&ready_list, &t->elem);
   t->status = THREAD_READY;
   intr_set_level (old_level);
+
+  /* Check if unblocked thread priority is greater than current
+     thread and unblocked thread is not the idle thread. */
+  struct thread *cur = thread_current ();
+  if (t->effective_priority > cur->effective_priority && 
+      strcmp (cur->name, "idle") != 0)
+  {
+    thread_yield ();
+  }
 }
 
 /* Returns the name of the running thread. */
@@ -339,7 +359,7 @@ thread_yield (void)
 
   old_level = intr_disable ();
   if (cur != idle_thread) 
-    list_insert_ordered (&ready_list, &cur->elem, *compare_thread_by_priority, NULL); 
+    list_insert_ordered (&ready_list, &cur->elem, *cmp_priority, NULL); 
     // list_push_back (&ready_list, &cur->elem);
   cur->status = THREAD_READY;
   schedule ();
@@ -371,20 +391,33 @@ thread_set_priority (int new_priority)
   if (new_priority >= PRI_MIN && new_priority <= PRI_MAX) 
   {
     cur->priority = new_priority;
-    cur->effective_priority = new_priority;
+
+    /* Only update effective priority IF new_priority is greater
+       than effective priority. */
+    // if (new_priority > cur->effective_priority)
+    // {
+      cur->effective_priority = new_priority; 
+    // }
+
     /* Check if new_priority is less than priority of
-       front of ready_list.  */
-    struct list_elem *front_elem = list_front (&ready_list);
-    struct thread *t_front = list_entry (front_elem, struct thread, elem);
-    if (t_front->effective_priority > cur->effective_priority)
-      thread_yield ();
+       front of ready_list. */
+    if (!list_empty (&ready_list))
+    {
+      struct list_elem *front_elem = list_front (&ready_list);
+      struct thread *t_front = list_entry (front_elem, struct thread, elem);
+      
+      if (t_front->effective_priority > cur->effective_priority) {
+        thread_yield ();
+      }
+    }
   } else    // If invalid priority - set to default priority
   {
+    printf("Invalid priority\n");
     thread_current ()->priority = PRI_DEFAULT;
   }
 }
 
-/* Returns the current thread's priority. */
+/* Returns the current thread's EFFECTIVE priority. */
 int
 thread_get_priority (void) 
 {
