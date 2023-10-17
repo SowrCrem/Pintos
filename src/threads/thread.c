@@ -94,17 +94,6 @@ cmp_priority(const struct list_elem *a, const struct list_elem *b,
   return t_a->effective_priority > t_b->effective_priority;
 }
 
-/* Updates effective priority of currently running thread,
-   and yields if new max priority is less than next ready
-   thread's running priority.
-   
-   HH SS*/
-void
-update_effective_priority () {
-  /* Check donated priority list */
-
-}
-
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
    general and it is possible in this case only because loader.S
@@ -382,7 +371,6 @@ thread_yield (void)
 
   old_level = intr_disable ();
   if (cur != idle_thread) 
-    list_insert_ordered (&ready_list, &cur->elem, *cmp_priority, NULL); 
     list_insert_ordered (&ready_list, &cur->elem, *cmp_priority, NULL); 
     // list_push_back (&ready_list, &cur->elem);
   cur->status = THREAD_READY;
