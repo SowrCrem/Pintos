@@ -248,9 +248,6 @@ thread_create (const char *name, int priority, thread_func *function,
 
   intr_set_level (old_level);
 
-  /* Initialize the donated priorities list. */
-  list_init(&initial_thread->donated_priorities);
-
   /* Add to run queue. */
   thread_unblock (t);
 
@@ -290,8 +287,8 @@ thread_unblock (struct thread *t)
 
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
-  list_insert_ordered(&ready_list, &t->elem, *cmp_priority, NULL);
-  // list_push_back (&ready_list, &t->elem);
+  list_insert_ordered (&ready_list, &t->elem, *cmp_priority, NULL);
+  // list_push_back (&ready_list, &t->elem\);
   t->status = THREAD_READY;
   intr_set_level (old_level);
 
@@ -404,12 +401,12 @@ thread_set_priority (int new_priority)
   {
     cur->priority = new_priority;
 
-    /* Only update effective priority IF new_priority is greater
-       than effective priority. */
-    // if (new_priority > cur->effective_priority)
-    // {
-      cur->effective_priority = new_priority; 
-    // }
+    /* Don't update effective priority if priority donations
+       are present AND new_priority < effective priority. */
+    if (list_empty (&cur->donated_priorities))
+      cur->effective_priority = new_priority;
+    else if (new_priority > cur->effective_priority)
+      cur->effective_priority = new_priority;
 
     /* Check if new_priority is less than priority of
        front of ready_list. */
@@ -556,6 +553,9 @@ init_thread (struct thread *t, const char *name, int priority)
   /* Effective priority initialized to priority. */
   t->effective_priority = priority;
   t->magic = THREAD_MAGIC;
+
+  /* Initialize the donated priorities list. */
+  list_init(&t->donated_priorities);
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
