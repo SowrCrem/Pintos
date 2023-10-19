@@ -68,7 +68,7 @@ sema_down (struct semaphore *sema)
   old_level = intr_disable ();
   while (sema->value == 0) 
     {
-      list_insert_ordered (&sema->waiters, &thread_current ()->elem, *cmp_priority, NULL);
+      list_insert_ordered (&sema->waiters, &thread_current ()->elem, *cmp_thread_priority, NULL);
       // list_push_back (&sema->waiters, &thread_current ()->elem);
       thread_block ();
     }
@@ -114,10 +114,10 @@ sema_up (struct semaphore *sema)
   ASSERT (sema != NULL);
 
   old_level = intr_disable ();
+  sema->value++;
   if (!list_empty (&sema->waiters)) 
     thread_unblock (list_entry (list_pop_front (&sema->waiters),
                                 struct thread, elem));
-  sema->value++;
   intr_set_level (old_level);
 }
 
@@ -252,6 +252,7 @@ struct semaphore_elem
   {
     struct list_elem elem;              /* List element. */
     struct semaphore semaphore;         /* This semaphore. */
+    int priority;                       /* Thread's priority. */
   };
 
 /* Initializes condition variable COND.  A condition variable
@@ -296,7 +297,17 @@ cond_wait (struct condition *cond, struct lock *lock)
   ASSERT (lock_held_by_current_thread (lock));
   
   sema_init (&waiter.semaphore, 0);
-  list_insert_ordered (&cond->waiters, &waiter.elem, *cmp_priority, NULL);
+  waiter.priority = thread_current ()->effective_priority;
+
+  struct list_elem *e;
+  int i = 1;
+  printf("LIST:\n");
+  for (e = list_begin(&cond->waiters); e != list_end (&cond->waiters); e = list_next (e)) {
+    printf("LIST_ELEM %i IS %i\n", i, list_entry(e, struct semaphore_elem, elem)->priority);
+    i++;
+  }
+
+  list_insert_ordered (&cond->waiters, &waiter.elem, *cmp_thread_priority, NULL);
   // list_push_back (&cond->waiters, &waiter.elem);
   lock_release (lock);
   sema_down (&waiter.semaphore);
