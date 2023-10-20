@@ -259,7 +259,7 @@ struct semaphore_elem
    than semaphore_elem 'b', else false.
 
    HH SS */
-bool
+static bool
 cmp_cond_priority (const struct list_elem *a, const struct list_elem *b,
                   void *aux UNUSED)
 {
