@@ -32,19 +32,6 @@
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 
-/* Returns true if priority of semaphore_elem 'a' is greater
-   than semaphore_elem 'b', else false.
-
-   HH SS */
-bool
-cmp_cond_priority(const struct list_elem *a, const struct list_elem *b,
-                  void *aux UNUSED)
-{
-    const struct semaphore_elem *s_a = list_entry(a, struct semaphore_elem, elem);
-    const struct semaphore_elem *s_b = list_entry(b, struct semaphore_elem, elem);
-
-    return s_a->priority > s_b->priority;
-}
 
 /* Initializes semaphore SEMA to VALUE.  A semaphore is a
    nonnegative integer along with two atomic operators for
@@ -268,6 +255,20 @@ struct semaphore_elem
     struct semaphore semaphore;         /* This semaphore. */
     int priority;                       /* Thread's priority. */
   };
+
+/* Returns true if priority of semaphore_elem 'a' is greater
+   than semaphore_elem 'b', else false.
+
+   HH SS */
+bool
+cmp_cond_priority (const struct list_elem *a, const struct list_elem *b,
+                  void *aux UNUSED)
+{
+    const struct semaphore_elem *s_a = list_entry (a, struct semaphore_elem, elem);
+    const struct semaphore_elem *s_b = list_entry (b, struct semaphore_elem, elem);
+
+    return s_a->priority > s_b->priority;
+}
 
 /* Initializes condition variable COND.  A condition variable
    allows one piece of code to signal a condition and cooperating
