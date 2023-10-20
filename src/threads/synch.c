@@ -197,6 +197,9 @@ lock_acquire (struct lock *lock)
   ASSERT (!intr_context ());
   ASSERT (!lock_held_by_current_thread (lock));
 
+  /* TODO:
+     If holder.priority less than cur.priority, then donate 
+     cur.priority to holder -> update holder priority -> yield */
   sema_down (&lock->semaphore);
   lock->holder = thread_current ();
 }
@@ -232,6 +235,9 @@ lock_release (struct lock *lock)
   ASSERT (lock != NULL);
   ASSERT (lock_held_by_current_thread (lock));
 
+  /* TODO: (holder is current thread)
+     If holder's donated priority list not empty, remove highest
+     priority from donated list -> update holder priority -> yield */
   lock->holder = NULL;
   sema_up (&lock->semaphore);
 }

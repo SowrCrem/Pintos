@@ -85,13 +85,24 @@ static tid_t allocate_tid (void);
    
    HH SS */
 bool
-cmp_thread_priority(const struct list_elem *a, const struct list_elem *b, 
+cmp_thread_priority (const struct list_elem *a, const struct list_elem *b, 
              void *aux UNUSED)
 {
   const struct thread *t_a = list_entry(a, struct thread, elem);
   const struct thread *t_b = list_entry(b, struct thread, elem);
 
   return t_a->effective_priority > t_b->effective_priority;
+}
+
+/* TODO: Add current thread's (highest) priority to OTHER thread's
+   donated priorities list. Then update OTHER thread's effective
+   priority. Then yield current thread.
+   
+   HH SS */
+void
+donate_priority (struct thread *other)
+{
+
 }
 
 /* Initializes the threading system by transforming the code
