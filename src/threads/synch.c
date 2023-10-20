@@ -70,7 +70,6 @@ sema_down (struct semaphore *sema)
   while (sema->value == 0) 
     {
       list_insert_ordered (&sema->waiters, &thread_current ()->elem, *cmp_thread_priority, NULL);
-      // list_push_back (&sema->waiters, &thread_current ()->elem);
       thread_block ();
     }
   sema->value--;
@@ -314,16 +313,7 @@ cond_wait (struct condition *cond, struct lock *lock)
   sema_init (&waiter.semaphore, 0);
   waiter.priority = thread_current ()->effective_priority;
 
-//  struct list_elem *e;
-//  int i = 1;
-//  printf("LIST:\n");
-//  for (e = list_begin(&cond->waiters); e != list_end (&cond->waiters); e = list_next (e)) {
-//    printf("LIST_ELEM %i IS %i\n", i, list_entry(e, struct semaphore_elem, elem)->priority);
-//    i++;
-//  }
-
   list_insert_ordered (&cond->waiters, &waiter.elem, *cmp_cond_priority, NULL);
-  // list_push_back (&cond->waiters, &waiter.elem);
   lock_release (lock);
   sema_down (&waiter.semaphore);
   lock_acquire (lock);
