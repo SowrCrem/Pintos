@@ -105,6 +105,8 @@ thread_init (void)
   init_thread (initial_thread, "main", PRI_DEFAULT);
   initial_thread->status = THREAD_RUNNING;
   initial_thread->tid = allocate_tid ();
+  initial_thread->recent_cpu = INT_TO_FIXED(0);
+  initial_thread->nice = 0;
 }
 
 /* Starts preemptive thread scheduling by enabling interrupts.
@@ -204,6 +206,9 @@ thread_create (const char *name, int priority,
   /* Initialize thread. */
   init_thread (t, name, priority);
   tid = t->tid = allocate_tid ();
+    /* Set recent_cpu value */
+  t->recent_cpu = thread_current()->recent_cpu;
+  t->nice = thread_current()->nice;
 
   /* Prepare thread for first run by initializing its stack.
      Do this atomically so intermediate values for the 'stack' 
@@ -224,6 +229,7 @@ thread_create (const char *name, int priority,
   sf = alloc_frame (t, sizeof *sf);
   sf->eip = switch_entry;
   sf->ebp = 0;
+
 
   intr_set_level (old_level);
 
@@ -376,33 +382,39 @@ thread_get_priority (void)
 
 /* Sets the current thread's nice value to NICE. */
 void
-thread_set_nice (int nice UNUSED) 
+thread_set_nice (int new_nice) 
 {
-  /* Not yet implemented. */
+  thread_current()->nice = new_nice;
+  update_thread_priority(thread_current(), NULL);
+  if (thread_current()->priority < highest_priority)
+  {
+    thread_yield();
+  }
 }
 
 /* Returns the current thread's nice value. */
 int
 thread_get_nice (void) 
 {
-  /* Not yet implemented. */
-  return 0;
+  return thread_current()->nice;
 }
 
 /* Returns 100 times the system load average. */
 int
 thread_get_load_avg (void) 
 {
-  /* Not yet implemented. */
-  return 0;
+  int32_t load_avg = LOAD_AVG;
+  load_avg = FIXED_MUL_INT(load_avg, 100);
+  int rounded_load_avg = FIXED_TO_INT_TO_NEAREST(load_avg);
+  return rounded_load_avg;
+
 }
 
 /* Returns 100 times the current thread's recent_cpu value. */
 int
 thread_get_recent_cpu (void) 
 {
-  /* Not yet implemented. */
-  return 0;
+  return FIXED_TO_INT_TO_NEAREST(FIXED_MUL_INT(thread_current()->recent_cpu, 100));
 }
 
 /* Idle thread.  Executes when no other thread is ready to run.
@@ -682,9 +694,8 @@ update_load_avg(void)
   int32_t frac1 = FIXED_DIV_INT(INT_TO_FIXED(59), 60);
   int32_t frac2 = FIXED_DIV_INT(INT_TO_FIXED(1), 60);
 
-  int ready_threads = (list_size(&ready_list));
-  printf("ready_threads = %d", ready_threads );
-  printf("load_avg = %d", LOAD_AVG );
+  int ready_threads = (int) (list_size(&ready_list));
+ 
   if ((thread_current() != idle_thread)) {
     ready_threads++;
   }
