@@ -32,6 +32,20 @@
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 
+/* Returns true if priority of semaphore_elem 'a' is greater
+   than semaphore_elem 'b', else false.
+
+   HH SS */
+bool
+cmp_cond_priority(const struct list_elem *a, const struct list_elem *b,
+                  void *aux UNUSED)
+{
+    const struct semaphore_elem *s_a = list_entry(a, struct semaphore_elem, elem);
+    const struct semaphore_elem *s_b = list_entry(b, struct semaphore_elem, elem);
+
+    return s_a->priority > s_b->priority;
+}
+
 /* Initializes semaphore SEMA to VALUE.  A semaphore is a
    nonnegative integer along with two atomic operators for
    manipulating it:
@@ -299,15 +313,15 @@ cond_wait (struct condition *cond, struct lock *lock)
   sema_init (&waiter.semaphore, 0);
   waiter.priority = thread_current ()->effective_priority;
 
-  struct list_elem *e;
-  int i = 1;
-  printf("LIST:\n");
-  for (e = list_begin(&cond->waiters); e != list_end (&cond->waiters); e = list_next (e)) {
-    printf("LIST_ELEM %i IS %i\n", i, list_entry(e, struct semaphore_elem, elem)->priority);
-    i++;
-  }
+//  struct list_elem *e;
+//  int i = 1;
+//  printf("LIST:\n");
+//  for (e = list_begin(&cond->waiters); e != list_end (&cond->waiters); e = list_next (e)) {
+//    printf("LIST_ELEM %i IS %i\n", i, list_entry(e, struct semaphore_elem, elem)->priority);
+//    i++;
+//  }
 
-  list_insert_ordered (&cond->waiters, &waiter.elem, *cmp_thread_priority, NULL);
+  list_insert_ordered (&cond->waiters, &waiter.elem, *cmp_cond_priority, NULL);
   // list_push_back (&cond->waiters, &waiter.elem);
   lock_release (lock);
   sema_down (&waiter.semaphore);
