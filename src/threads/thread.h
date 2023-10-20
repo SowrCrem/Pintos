@@ -92,6 +92,8 @@ struct thread
 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
+    int32_t recent_cpu;
+    int nice;
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
@@ -113,6 +115,12 @@ size_t threads_ready(void);
 
 void thread_tick (void);
 void thread_print_stats (void);
+
+void update_bsd_variables(void);
+void update_thread_priority (struct thread *t, void *aux);
+void update_recent_cpu (struct thread *t, void *aux);
+void update_load_avg(void);
+
 
 typedef void thread_func (void *aux);
 tid_t thread_create (const char *name, int priority, thread_func *, void *);

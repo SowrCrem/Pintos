@@ -11,6 +11,9 @@
 #include "threads/switch.h"
 #include "threads/synch.h"
 #include "threads/vaddr.h"
+#include "threads/thread.h"
+#include "threads/fixed-point.h"
+#include "devices/timer.h"
 #ifdef USERPROG
 #include "userprog/process.h"
 #endif
@@ -19,6 +22,7 @@
    Used to detect stack overflow.  See the big comment at the top
    of thread.h for details. */
 #define THREAD_MAGIC 0xcd6abf4b
+
 
 /* List of processes in THREAD_READY state, that is, processes
    that are ready to run but not actually running. */
@@ -36,6 +40,9 @@ static struct thread *initial_thread;
 
 /* Lock used by allocate_tid(). */
 static struct lock tid_lock;
+
+
+static int32_t LOAD_AVG = 0;
 
 /* Stack frame for kernel_thread(). */
 struct kernel_thread_frame 
@@ -140,6 +147,13 @@ thread_tick (void)
 #endif
   else
     kernel_ticks++;
+
+  /* Updating BSD scheduler variables */
+  if (thread_mlfqs) 
+  {
+    update_bsd_variables();
+  }
+
 
   /* Enforce preemption. */
   if (++thread_ticks >= TIME_SLICE)
@@ -597,3 +611,84 @@ allocate_tid (void)
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
+
+/* Updates all bsd variables */
+void update_bsd_variables(void)
+{
+  struct thread *t = thread_current();
+
+  /*Update Load Avg and Recent_CPU every second*/
+    if ((timer_ticks () % TIMER_FREQ) == 0 ) 
+    {
+      update_load_avg ();
+      thread_foreach (&update_recent_cpu, NULL);
+  }
+    
+    /* increment recent_cpu every timer tick */
+    if (thread_current () != idle_thread) {
+      t->recent_cpu = FIXED_ADD_INT(t->recent_cpu, 1);
+    }
+
+    /* Updates priority every 4th clock tick */
+    if ((timer_ticks ()  % TIME_SLICE) == 0)
+    {
+      thread_foreach(&update_thread_priority, NULL);
+      }
+}
+
+/* Updates each thread's priority in the BSD version */
+void update_thread_priority(struct thread *t, void *aux UNUSED) 
+{
+  //round down to nearest integer
+  int32_t new_priority = INT_TO_FIXED(PRI_MAX);
+  int32_t recent_cpu = FIXED_DIV_INT(t->recent_cpu, 4);
+  int32_t nice = INT_TO_FIXED(t->nice * 2);
+  new_priority = FIXED_SUB_FIXED(new_priority, recent_cpu);
+  new_priority = FIXED_SUB_FIXED(new_priority, nice);
+  
+  int priority = FIXED_TO_INT_TOWARD_ZERO(new_priority);
+
+  //to keep the priority of a thread between PRI_MIN and PRI_MAX
+  if (priority > PRI_MAX) {
+    priority = PRI_MAX;
+  } else if (priority < PRI_MIN) {
+    priority = PRI_MIN;
+  }
+
+  t->priority = priority; //Priority changed
+
+}
+
+/* Updates each thread's recent_cpu*/
+void 
+update_recent_cpu(struct thread *t, void *aux UNUSED) 
+{
+  int32_t num = INT_TO_FIXED(2);
+  num = FIXED_MUL_FIXED(num, LOAD_AVG);
+  int32_t den = FIXED_ADD_INT(num, 1);
+  num = FIXED_DIV_FIXED(num, den);
+
+  int32_t recent_cpu = FIXED_MUL_FIXED(num, t->recent_cpu);
+  recent_cpu = FIXED_ADD_INT(recent_cpu, t->nice);
+
+  t->recent_cpu = recent_cpu;
+
+} 
+
+/* Update load avg of current system */
+void 
+update_load_avg(void)
+{
+  int32_t frac1 = FIXED_DIV_INT(INT_TO_FIXED(59), 60);
+  int32_t frac2 = FIXED_DIV_INT(INT_TO_FIXED(1), 60);
+
+  int ready_threads = (list_size(&ready_list));
+  printf("ready_threads = %d", ready_threads );
+  printf("load_avg = %d", LOAD_AVG );
+  if ((thread_current() != idle_thread)) {
+    ready_threads++;
+  }
+
+  LOAD_AVG = FIXED_ADD_FIXED(FIXED_MUL_FIXED(frac1, LOAD_AVG), FIXED_MUL_INT(frac2, ready_threads));
+
+}
