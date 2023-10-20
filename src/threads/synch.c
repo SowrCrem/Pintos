@@ -51,6 +51,20 @@ sema_init (struct semaphore *sema, unsigned value)
   list_init (&sema->waiters);
 }
 
+/* Returns true if priority of semaphore_elem 'a' is greater
+   than semaphore_elem 'b', else false.
+
+   HH SS */
+static bool
+cmp_cond_priority (const struct list_elem *a, const struct list_elem *b,
+                   void *aux UNUSED)
+{
+	const struct semaphore_elem *s_a = list_entry (a, struct semaphore_elem, elem);
+	const struct semaphore_elem *s_b = list_entry (b, struct semaphore_elem, elem);
+
+	return s_a->priority > s_b->priority;
+}
+
 /* Down or "P" operation on a semaphore.  Waits for SEMA's value
    to become positive and then atomically decrements it.
 
@@ -251,28 +265,6 @@ lock_held_by_current_thread (const struct lock *lock)
   ASSERT (lock != NULL);
 
   return lock->holder == thread_current ();
-}
-
-/* One semaphore in a list. */
-struct semaphore_elem 
-  {
-    struct list_elem elem;              /* List element. */
-    struct semaphore semaphore;         /* This semaphore. */
-    int priority;                       /* Thread's priority. */
-  };
-
-/* Returns true if priority of semaphore_elem 'a' is greater
-   than semaphore_elem 'b', else false.
-
-   HH SS */
-static bool
-cmp_cond_priority (const struct list_elem *a, const struct list_elem *b,
-                  void *aux UNUSED)
-{
-    const struct semaphore_elem *s_a = list_entry (a, struct semaphore_elem, elem);
-    const struct semaphore_elem *s_b = list_entry (b, struct semaphore_elem, elem);
-
-    return s_a->priority > s_b->priority;
 }
 
 /* Initializes condition variable COND.  A condition variable

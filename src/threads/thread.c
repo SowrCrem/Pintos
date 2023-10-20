@@ -1,18 +1,18 @@
-#include "threads/thread.h"
+#include "../threads/thread.h"
 #include <debug.h>
 #include <stddef.h>
 #include <random.h>
 #include <stdio.h>
 #include <string.h>
-#include "threads/flags.h"
-#include "threads/interrupt.h"
-#include "threads/intr-stubs.h"
-#include "threads/palloc.h"
-#include "threads/switch.h"
-#include "threads/synch.h"
-#include "threads/vaddr.h"
+#include "../threads/flags.h"
+#include "../threads/interrupt.h"
+#include "../threads/intr-stubs.h"
+#include "../threads/palloc.h"
+#include "../threads/switch.h"
+#include "../threads/synch.h"
+#include "../threads/vaddr.h"
 #ifdef USERPROG
-#include "userprog/process.h"
+#include "../userprog/process.h"
 #endif
 
 /* Random value for struct thread's `magic' member.
@@ -85,7 +85,7 @@ static tid_t allocate_tid (void);
    
    HH SS */
 bool
-cmp_thread_priority (const struct list_elem *a, const struct list_elem *b, 
+cmp_thread_priority(const struct list_elem *a, const struct list_elem *b, 
              void *aux UNUSED)
 {
   const struct thread *t_a = list_entry(a, struct thread, elem);
@@ -314,7 +314,7 @@ thread_unblock (struct thread *t)
 
 /* Returns the name of the running thread. */
 const char *
-thread_name (void) 
+thread_name (void)
 {
   return thread_current ()->name;
 }
@@ -421,8 +421,7 @@ thread_set_priority (int new_priority)
        front of ready_list. */
     if (!list_empty (&ready_list))
     {
-      struct list_elem *front_elem = list_front (&ready_list);
-      struct thread *t_front = list_entry (front_elem, struct thread, elem);
+      struct thread *t_front = list_entry (list_front (&ready_list), struct thread, elem);
       
       if (t_front->effective_priority > cur->effective_priority) {
         thread_yield ();
