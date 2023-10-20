@@ -386,10 +386,12 @@ thread_set_nice (int new_nice)
 {
   thread_current()->nice = new_nice;
   update_thread_priority(thread_current(), NULL);
-  if (thread_current()->priority < highest_priority)
-  {
+
+  struct list_elem *pri_max_elem = list_max(&ready_list, &priority_less_func, NULL);
+  struct thread *thread = list_entry(pri_max_elem, struct thread, elem);
+  if (thread_current()->priority < thread->priority)
     thread_yield();
-  }
+  
 }
 
 /* Returns the current thread's nice value. */
@@ -703,3 +705,16 @@ update_load_avg(void)
   LOAD_AVG = FIXED_ADD_FIXED(FIXED_MUL_FIXED(frac1, LOAD_AVG), FIXED_MUL_INT(frac2, ready_threads));
 
 }
+
+bool 
+priority_less_func(const struct list_elem *a,
+                   const struct list_elem *b,
+                   void *aux UNUSED) 
+{
+  struct thread *a_thread, *b_thread;
+  a_thread = list_entry(a, struct thread, elem);
+  b_thread = list_entry(b, struct thread, elem);
+
+  return (a_thread->priority < b_thread->priority);
+}
+
