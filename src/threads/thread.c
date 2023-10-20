@@ -386,10 +386,6 @@ thread_set_nice (int new_nice)
 {
   thread_current()->nice = new_nice;
   update_thread_priority(thread_current(), NULL);
-  if (thread_current()->priority < highest_priority)
-  {
-    thread_yield();
-  }
 }
 
 /* Returns the current thread's nice value. */
@@ -703,3 +699,4 @@ update_load_avg(void)
   LOAD_AVG = FIXED_ADD_FIXED(FIXED_MUL_FIXED(frac1, LOAD_AVG), FIXED_MUL_INT(frac2, ready_threads));
 
 }
+
