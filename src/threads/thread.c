@@ -415,7 +415,7 @@ thread_foreach (thread_action_func *func, void *aux)
 void
 thread_set_priority (int new_priority) 
 {
-  if (thread_mlfqs) 
+  if (!thread_mlfqs) 
   {
     struct thread *cur = thread_current ();
     if (new_priority >= PRI_MIN && new_priority <= PRI_MAX) 
