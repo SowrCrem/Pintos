@@ -115,11 +115,6 @@ struct thread
 extern bool thread_mlfqs;
 
 
-/* Added functions - HH SS */
-bool cmp_thread_priority (const struct list_elem *a, const struct list_elem *b, 
-                          void *aux UNUSED);
-
-
 void thread_init (void);
 void thread_start (void);
 size_t threads_ready(void);
@@ -159,7 +154,11 @@ void update_thread_priority (struct thread *t, void *aux);
 void update_recent_cpu (struct thread *t, void *aux);
 void update_load_avg(void);
 
-bool priority_less_func(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
+
+bool priority_less_func(const struct list_elem *a, 
+                  const struct list_elem *b, void *aux UNUSED);
+bool effective_priority_less_func (const struct list_elem *a, 
+                  const struct list_elem *b, void *aux UNUSED);
 void yield_for_highest_priority(void);
 
 #endif /* threads/thread.h */

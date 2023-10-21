@@ -89,19 +89,7 @@ static void schedule (void);
 void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
 
-/* Returns true if effective priority of thread 'a' is greater 
-   than thread 'b', else false. 
-   
-   HH SS */
-bool
-cmp_thread_priority(const struct list_elem *a, const struct list_elem *b, 
-             void *aux UNUSED)
-{
-  const struct thread *t_a = list_entry(a, struct thread, elem);
-  const struct thread *t_b = list_entry(b, struct thread, elem);
 
-  return t_a->effective_priority > t_b->effective_priority;
-}
 
 /* TODO: Add current thread's (highest) priority to OTHER thread's
    donated priorities list. Then update OTHER thread's effective
@@ -313,7 +301,10 @@ thread_unblock (struct thread *t)
 
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
-  list_insert_ordered (&ready_list, &t->elem, *cmp_thread_priority, NULL);
+  if (thread_mlfqs)
+    list_push_back (&ready_list, &t->elem);
+  else
+    list_insert_ordered (&ready_list, &t->elem, *effective_priority_less_func, NULL);
   t->status = THREAD_READY;
   intr_set_level (old_level);
 
@@ -392,8 +383,12 @@ thread_yield (void)
   ASSERT (!intr_context ());
 
   old_level = intr_disable ();
-  if (cur != idle_thread) 
-    list_insert_ordered (&ready_list, &cur->elem, *cmp_thread_priority, NULL); 
+  if (cur != idle_thread){
+    if (thread_mlfqs)
+      list_push_back (&ready_list, &cur->elem);
+    else 
+      list_insert_ordered (&ready_list, &cur->elem, *effective_priority_less_func, NULL); 
+  }
   cur->status = THREAD_READY;
   schedule ();
   intr_set_level (old_level);
@@ -805,6 +800,20 @@ priority_less_func(const struct list_elem *a, const struct list_elem *b, void *a
   struct thread *b_thread = list_entry(b, struct thread, elem);
 
   return (a_thread->priority < b_thread->priority);
+}
+
+/* Returns true if effective priority of thread 'a' is greater 
+   than thread 'b', else false. 
+   
+   HH SS */
+bool
+effective_priority_less_func(const struct list_elem *a, const struct list_elem *b, 
+             void *aux UNUSED)
+{
+  const struct thread *t_a = list_entry(a, struct thread, elem);
+  const struct thread *t_b = list_entry(b, struct thread, elem);
+
+  return t_a->effective_priority > t_b->effective_priority;
 }
 
 
