@@ -88,13 +88,12 @@ struct thread
     char name[16];                      /* Name (for debugging purposes). */
     uint8_t *stack;                     /* Saved stack pointer. */
     int priority;                       /* Priority. */
+    int effective_priority;             /* Effective priority. */
+    struct list donated_priorities;     /* List of donated priorities to thread. */
     struct list_elem allelem;           /* List element for all threads list. */
 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
-    struct list_elem mlf_elem;          /* MLF Elem for MLFQ scheduling */
-    int32_t recent_cpu;                 /* Recent CPU for MLFQ scheduling */
-    int nice;                           /* Niceness for MLFQ scheduling */
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
@@ -109,6 +108,12 @@ struct thread
    If true, use multi-level feedback queue scheduler.
    Controlled by kernel command-line option "mlfqs". */
 extern bool thread_mlfqs;
+
+
+/* Added functions - HH SS */
+bool cmp_thread_priority (const struct list_elem *a, const struct list_elem *b, 
+                          void *aux UNUSED);
+
 
 void thread_init (void);
 void thread_start (void);
@@ -133,6 +138,7 @@ void thread_yield (void);
 /* Performs some operation on thread t, given auxiliary data AUX. */
 typedef void thread_action_func (struct thread *t, void *aux);
 void thread_foreach (thread_action_func *, void *);
+
 int thread_get_priority (void);
 void thread_set_priority (int);
 
@@ -140,14 +146,5 @@ int thread_get_nice (void);
 void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
-
-/* BSD Calculations */
-void update_bsd_variables(void);
-void update_thread_priority (struct thread *t, void *aux);
-void update_recent_cpu (struct thread *t, void *aux);
-void update_load_avg(void);
-
-bool priority_less_func(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
-void yield_for_highest_priority(void);
 
 #endif /* threads/thread.h */

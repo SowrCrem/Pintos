@@ -115,7 +115,7 @@ timer_sleep (int64_t ticks)
 
   /*Insert sleep_sema element into sleepingList*/
   lock_acquire(&sleeplist_lock);
-  list_insert_ordered(&sleepingList, &(sleep_sema.list_elem), thread_wakeup_less, NULL);
+  list_insert_ordered(&sleepingList, &sleep_sema.list_elem, thread_wakeup_less, NULL);
   lock_release(&sleeplist_lock);
  
   sema_down(&(sleep_sema.semaphore));
@@ -201,17 +201,19 @@ timer_interrupt (struct intr_frame *args UNUSED)
   thread_tick ();
 
   /*Waking up sleep_sema*/
-  while(!list_empty(&sleepingList)) {
+  while(!list_empty (&sleepingList)) {
     /*Retrieve sleep_sema from the front of the list*/ 
-    struct list_elem *sleep_elem = list_front(&sleepingList);
-    struct sleep_sema *sleeping_thread = list_entry(sleep_elem, struct sleep_sema, list_elem);
+    struct list_elem *sleep_elem = list_front (&sleepingList);
+    struct sleep_sema *sleeping_thread = list_entry (sleep_elem, struct sleep_sema, list_elem);
   
      /*Pop sleep_sema from list if ready to wakeup*/ 
-    if ((sleeping_thread->wakeup_time) <= (ticks)) {
-      struct list_elem *sleep_elem = list_pop_front(&sleepingList);
-      struct sleep_sema *sleeping_thread = list_entry(sleep_elem, struct sleep_sema, list_elem);
-      sema_up(&(sleeping_thread->semaphore));
-    } else {
+    if (sleeping_thread->wakeup_time <= ticks)
+    {
+      struct list_elem *sleep_elem = list_pop_front (&sleepingList);
+      struct sleep_sema *sleeping_thread = list_entry (sleep_elem, struct sleep_sema, list_elem);
+      sema_up (&sleeping_thread->semaphore);
+    } else 
+    {
       break;
     }
   }
@@ -289,9 +291,11 @@ real_time_delay (int64_t num, int32_t denom)
 }
 
 /* Custom comparison function to order threads by wake-up time. */
-bool thread_wakeup_less(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED) {
-  const struct sleep_sema *timer_sema_A = list_entry(a, struct sleep_sema, list_elem);
-  const struct sleep_sema *timer_sema_B = list_entry(b, struct sleep_sema, list_elem);
+bool 
+thread_wakeup_less (const struct list_elem *a, const struct list_elem *b, void *aux UNUSED)
+{
+  const struct sleep_sema *timer_sema_A = list_entry (a, struct sleep_sema, list_elem);
+  const struct sleep_sema *timer_sema_B = list_entry (b, struct sleep_sema, list_elem);
 
   return (timer_sema_A->wakeup_time < timer_sema_B->wakeup_time);
 }

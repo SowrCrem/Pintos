@@ -1,6 +1,0 @@
-{
-    "files.associations": {
-        "flags.h": "c",
-        "palloc.h": "c"
-    }
-}
