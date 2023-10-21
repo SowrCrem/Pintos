@@ -1,0 +1,19 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug Task 1",
+            "type": "i686-elf-gdb",
+            "request": "attach",
+            "executable": "${workspaceRoot}/src/threads/build/kernel.o", // change this for each task
+            "cwd": "${workspaceRoot}/src/threads", // change this for each task
+            "valuesFormatting": "parseText",
+            "target": "localhost:1234",
+            "remote": true,
+            "stopAtConnect": true,
+            "autorun": [
+                "source ${workspaceRoot}/src/misc/gdb-macros"
+            ]
+        }
+    ]
+}
