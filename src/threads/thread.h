@@ -94,6 +94,11 @@ struct thread
 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
+    struct list_elem mlf_elem;          /* MLF Elem for MLFQ scheduling */
+    int32_t recent_cpu;                 /* Recent CPU for MLFQ scheduling */
+    int nice;                           /* Niceness for MLFQ scheduling */
+
+
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
@@ -146,5 +151,15 @@ int thread_get_nice (void);
 void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
+
+
+/* BSD Calculations */
+void update_bsd_variables(void);
+void update_thread_priority (struct thread *t, void *aux);
+void update_recent_cpu (struct thread *t, void *aux);
+void update_load_avg(void);
+
+bool priority_less_func(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
+void yield_for_highest_priority(void);
 
 #endif /* threads/thread.h */

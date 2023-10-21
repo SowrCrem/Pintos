@@ -1,0 +1,7 @@
+{
+    "files.associations": {
+        "timer.h": "c",
+        "thread.h": "c",
+        "vaddr.h": "c"
+    }
+}
