@@ -88,16 +88,6 @@ static tid_t allocate_tid (void);
 
 
 
-/* TODO: Add current thread's (highest) priority to OTHER thread's
-   donated priorities list. Then update OTHER thread's effective
-   priority. Then yield current thread.
-   
-   HH SS */
-void
-donate_priority (struct thread *other)
-{
-
-}
 
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
@@ -300,12 +290,9 @@ thread_unblock (struct thread *t)
   ASSERT (t->status == THREAD_BLOCKED);
   if (thread_mlfqs)
     update_thread_priority(t, NULL);
-  else 
-    list_insert_ordered (&ready_list, &t->elem, *effective_priority_less_func, NULL);
+  
+  list_insert_ordered (&ready_list, &t->elem, *priority_cmp_func, NULL);
   t->status = THREAD_READY;
-  if (thread_mlfqs)
-    list_insert_ordered(&ready_list, &t->elem, *priority_less_func, NULL);
-
   intr_set_level (old_level);
 
   /* Check if unblocked thread priority is greater than current
@@ -391,10 +378,7 @@ thread_yield (void)
 
   old_level = intr_disable ();
   if (cur != idle_thread){
-    if (thread_mlfqs)
-      list_insert_ordered(&ready_list, &cur->elem, *priority_less_func, NULL);
-    else 
-      list_insert_ordered (&ready_list, &cur->elem, *effective_priority_less_func, NULL); 
+    list_insert_ordered (&ready_list, &cur->elem, *priority_cmp_func, NULL); 
   }
   cur->status = THREAD_READY;
   schedule ();
@@ -748,7 +732,7 @@ update_bsd_variables(void)
   /* Updates Priority every Time Slice */
   if ((timer_ticks ()  % TIME_SLICE) == 0) {
     thread_foreach(&update_thread_priority, NULL);
-    list_sort(&ready_list, &priority_less_func, NULL);
+    list_sort(&ready_list, &priority_cmp_func, NULL);
   }
 
   intr_yield_on_return ();
@@ -803,27 +787,17 @@ update_load_avg(void)
 
 
 /* Priority Comparison Function */
-bool 
-priority_less_func(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED)
-{
-  struct thread *a_thread = list_entry(a, struct thread, elem);
-  struct thread *b_thread = list_entry(b, struct thread, elem);
-
-  return (a_thread->priority > b_thread->priority);
-}
-
-/* Returns true if effective priority of thread 'a' is greater 
-   than thread 'b', else false. 
-   
-   HH SS */
 bool
-effective_priority_less_func(const struct list_elem *a, const struct list_elem *b, 
+priority_cmp_func(const struct list_elem *a, const struct list_elem *b, 
              void *aux UNUSED)
 {
-  const struct thread *t_a = list_entry(a, struct thread, elem);
-  const struct thread *t_b = list_entry(b, struct thread, elem);
+  const struct thread *a_thread = list_entry(a, struct thread, elem);
+  const struct thread *b_thread = list_entry(b, struct thread, elem);
 
-  return t_a->effective_priority > t_b->effective_priority;
+  if (thread_mlfqs)
+    return (a_thread->priority > b_thread->priority);
+  else
+    return (a_thread->effective_priority > b_thread->effective_priority);
 }
 
 
@@ -832,7 +806,18 @@ void
 yield_for_highest_priority(void) 
 {
   struct thread * next = list_entry (list_max 
-    (&ready_list, &priority_less_func, NULL), struct thread, elem);
+    (&ready_list, &priority_cmp_func, NULL), struct thread, elem);
   if(thread_current()->priority < next->priority)
     thread_yield ();
+}
+
+/* TODO: Add current thread's (highest) priority to OTHER thread's
+   donated priorities list. Then update OTHER thread's effective
+   priority. Then yield current thread.
+   
+   HH SS */
+void
+donate_priority (struct thread *other UNUSED)
+{
+
 }

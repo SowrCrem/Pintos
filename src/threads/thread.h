@@ -155,10 +155,11 @@ void update_recent_cpu (struct thread *t, void *aux);
 void update_load_avg(void);
 
 
-bool priority_less_func(const struct list_elem *a, 
-                  const struct list_elem *b, void *aux UNUSED);
-bool effective_priority_less_func (const struct list_elem *a, 
+
+bool priority_cmp_func (const struct list_elem *a, 
                   const struct list_elem *b, void *aux UNUSED);
 void yield_for_highest_priority(void);
 
+
+void donate_priority (struct thread *other UNUSED);
 #endif /* threads/thread.h */
