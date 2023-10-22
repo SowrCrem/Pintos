@@ -38,9 +38,6 @@ static struct thread *idle_thread;
 /* Initial thread, the thread running init.c:main(). */
 static struct thread *initial_thread;
 
-/* Implementing multi level feedback queue */
-static struct list mlf_queue[PRI_MAX + 1];
-
 /* Lock used by allocate_tid(). */
 static struct lock tid_lock;
 
@@ -132,12 +129,8 @@ thread_init (void)
 
   if (thread_mlfqs)
 	{
-	  int i = 0;
-    while (i < PRI_MAX + 1)
-    {
-      list_init(&mlf_queue[i]);
-      i++;
-    }
+    initial_thread->nice = 0;
+    initial_thread->recent_cpu = INT_TO_FIXED(0);
 	}
 }
 
@@ -261,9 +254,13 @@ thread_create (const char *name, int priority, thread_func *function,
 
   /* Add to run queue. */
   thread_unblock (t);
-
-  if(t->priority > thread_current()->priority)
+  if (thread_mlfqs)
+  {
+    t->nice = thread_get_nice();
+    if(t->priority > thread_current()->priority)
     thread_yield ();
+  }
+  
 
   return tid;
 }
@@ -302,20 +299,27 @@ thread_unblock (struct thread *t)
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
   if (thread_mlfqs)
-    list_push_back (&ready_list, &t->elem);
-  else
+    update_thread_priority(t, NULL);
+  else 
     list_insert_ordered (&ready_list, &t->elem, *effective_priority_less_func, NULL);
   t->status = THREAD_READY;
+  if (thread_mlfqs)
+    list_insert_ordered(&ready_list, &t->elem, *priority_less_func, NULL);
+
   intr_set_level (old_level);
 
   /* Check if unblocked thread priority is greater than current
      thread and unblocked thread is not the idle thread. */
-  struct thread *cur = thread_current ();
-  if (t->effective_priority > cur->effective_priority && 
-      strcmp (cur->name, "idle") != 0)
-  {
-    thread_yield ();
+  if (!thread_mlfqs) {
+    struct thread *cur = thread_current ();
+    if (t->effective_priority > cur->effective_priority && 
+        strcmp (cur->name, "idle") != 0)
+    {
+      thread_yield ();
+    }
+
   }
+
 }
 
 /* Returns the name of the running thread. */
@@ -382,10 +386,13 @@ thread_yield (void)
   
   ASSERT (!intr_context ());
 
+  if (thread_mlfqs)
+    update_thread_priority(cur, NULL);
+
   old_level = intr_disable ();
   if (cur != idle_thread){
     if (thread_mlfqs)
-      list_push_back (&ready_list, &cur->elem);
+      list_insert_ordered(&ready_list, &cur->elem, *priority_less_func, NULL);
     else 
       list_insert_ordered (&ready_list, &cur->elem, *effective_priority_less_func, NULL); 
   }
@@ -468,6 +475,7 @@ thread_get_priority (void)
 void
 thread_set_nice (int new_nice UNUSED) 
 {
+  ASSERT(thread_mlfqs);
   thread_current()->nice = new_nice;
   update_thread_priority(thread_current(), NULL);
   if (!list_empty(&ready_list))   
@@ -738,8 +746,10 @@ update_bsd_variables(void)
     t->recent_cpu = FIXED_ADD_INT(t->recent_cpu, 1);
 
   /* Updates Priority every Time Slice */
-  if ((timer_ticks ()  % TIME_SLICE) == 0)
+  if ((timer_ticks ()  % TIME_SLICE) == 0) {
     thread_foreach(&update_thread_priority, NULL);
+    list_sort(&ready_list, &priority_less_func, NULL);
+  }
 
   intr_yield_on_return ();
 }
@@ -799,7 +809,7 @@ priority_less_func(const struct list_elem *a, const struct list_elem *b, void *a
   struct thread *a_thread = list_entry(a, struct thread, elem);
   struct thread *b_thread = list_entry(b, struct thread, elem);
 
-  return (a_thread->priority < b_thread->priority);
+  return (a_thread->priority > b_thread->priority);
 }
 
 /* Returns true if effective priority of thread 'a' is greater 

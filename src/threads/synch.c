@@ -69,7 +69,10 @@ sema_down (struct semaphore *sema)
   old_level = intr_disable ();
   while (sema->value == 0) 
     {
-      list_insert_ordered (&sema->waiters, &thread_current ()->elem, *effective_priority_less_func, NULL);
+      if (thread_mlfqs)
+        list_push_back (&sema->waiters, &thread_current ()->elem);
+      else
+        list_insert_ordered (&sema->waiters, &thread_current ()->elem, *effective_priority_less_func, NULL);
       thread_block ();
     }
   sema->value--;
@@ -269,10 +272,10 @@ static bool
 cmp_cond_priority (const struct list_elem *a, const struct list_elem *b,
                   void *aux UNUSED)
 {
-    const struct semaphore_elem *s_a = list_entry (a, struct semaphore_elem, elem);
-    const struct semaphore_elem *s_b = list_entry (b, struct semaphore_elem, elem);
+    const struct semaphore_elem *a_semaphore = list_entry (a, struct semaphore_elem, elem);
+    const struct semaphore_elem *b_semaphore = list_entry (b, struct semaphore_elem, elem);
 
-    return s_a->priority > s_b->priority;
+    return a_semaphore->priority > b_semaphore->priority;
 }
 
 /* Initializes condition variable COND.  A condition variable
