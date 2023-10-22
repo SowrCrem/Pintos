@@ -244,6 +244,7 @@ thread_create (const char *name, int priority, thread_func *function,
 
   /* Add to run queue. */
   thread_unblock (t);
+
   if (thread_mlfqs)
   {
     t->nice = thread_get_nice();
@@ -301,12 +302,8 @@ thread_unblock (struct thread *t)
     struct thread *cur = thread_current ();
     if (t->effective_priority > cur->effective_priority && 
         strcmp (cur->name, "idle") != 0)
-    {
       thread_yield ();
-    }
-
   }
-
 }
 
 /* Returns the name of the running thread. */
@@ -439,9 +436,6 @@ thread_set_priority (int new_priority)
   else 
   {
   thread_current ()->priority = new_priority;
-  if (thread_current()->status == THREAD_RUNNING 
-    && !list_empty(&ready_list))   
-  yield_for_highest_priority();
   }
 }
 
@@ -462,8 +456,10 @@ thread_set_nice (int new_nice UNUSED)
   ASSERT(thread_mlfqs);
   thread_current()->nice = new_nice;
   update_thread_priority(thread_current(), NULL);
-  if (!list_empty(&ready_list))   
-    yield_for_highest_priority();
+  struct thread * next = list_entry (list_max 
+    (&ready_list, &priority_cmp_func, NULL), struct thread, elem);
+  if(thread_current()->priority < next->priority)
+    thread_yield ();
 
 }
 
@@ -480,6 +476,7 @@ thread_get_nice (void)
 int
 thread_get_load_avg (void) 
 {
+  ASSERT (thread_mlfqs);
   return FIXED_TO_INT_TO_NEAREST(FIXED_MUL_INT(LOAD_AVG, 100));
 }
 
@@ -487,6 +484,7 @@ thread_get_load_avg (void)
 int
 thread_get_recent_cpu (void) 
 {
+  ASSERT (thread_mlfqs);
   return FIXED_TO_INT_TO_NEAREST(FIXED_MUL_INT(thread_current()->recent_cpu, 100));
 }
 
@@ -800,16 +798,6 @@ priority_cmp_func(const struct list_elem *a, const struct list_elem *b,
     return (a_thread->effective_priority > b_thread->effective_priority);
 }
 
-
-/* Yields if running thread no longer has highest priority */
-void
-yield_for_highest_priority(void) 
-{
-  struct thread * next = list_entry (list_max 
-    (&ready_list, &priority_cmp_func, NULL), struct thread, elem);
-  if(thread_current()->priority < next->priority)
-    thread_yield ();
-}
 
 /* TODO: Add current thread's (highest) priority to OTHER thread's
    donated priorities list. Then update OTHER thread's effective

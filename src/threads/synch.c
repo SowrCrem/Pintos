@@ -121,6 +121,7 @@ sema_up (struct semaphore *sema)
   if (!list_empty (&sema->waiters)) 
     thread_unblock (list_entry (list_pop_front (&sema->waiters),
                                 struct thread, elem));
+                                
   intr_set_level (old_level);
 }
 
@@ -241,6 +242,7 @@ lock_release (struct lock *lock)
   /* TODO: (holder is current thread)
      If holder's donated priority list not empty, remove highest
      priority from donated list -> update holder priority -> yield */
+  struct thread *cur = thread_current ();
   lock->holder = NULL;
   sema_up (&lock->semaphore);
 }
