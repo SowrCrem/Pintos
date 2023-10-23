@@ -446,7 +446,7 @@ thread_get_priority (void)
   if (thread_mlfqs)
     return thread_current()->priority;
   else 
-    return thread_current ()->effective_priority;
+    return update_donate_thread_priority(thread_current());
 }
 
 /* Sets the current thread's nice value to NICE. */
@@ -804,8 +804,22 @@ priority_cmp_func(const struct list_elem *a, const struct list_elem *b,
    priority. Then yield current thread.
    
    HH SS */
-void
-donate_priority (struct thread *other UNUSED)
+int
+update_donate_thread_priority (struct thread *t)
 {
+  int max_priority = PRI_MIN;
+  if (!list_empty(t->donated_priorities))
+  {
+    int temp_max;
+    struct thread *ptr;
+    for (ptr = list_begin(t->donated_priorities); ptr != list_end(t->donated_priorities); ptr = list_next(ptr))
+    {
+      int temp_max = update_donate_thread_priority(ptr);
+      if (max_priority < temp_max)
+        max_priority = temp_max;
+    }
+  }
+  else 
+    return t->effective_priority;
 
 }
