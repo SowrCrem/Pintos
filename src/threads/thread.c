@@ -464,11 +464,11 @@ thread_set_nice (int new_nice UNUSED)
   ASSERT(thread_mlfqs);
   thread_current()->nice = new_nice;
   update_thread_priority(thread_current(), NULL);
-  yield_if_blah();
+  yield_on_pri_change();
 
 }
 
-void yield_if_blah(void)
+void yield_on_pri_change(void)
 {
   struct thread * next = list_entry (list_max 
     (&ready_list, &priority_cmp_func, NULL), struct thread, elem);

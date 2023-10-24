@@ -155,7 +155,7 @@ void update_thread_priority (struct thread *t, void *aux);
 void update_recent_cpu (struct thread *t, void *aux);
 void update_load_avg(void);
 
-void yield_if_blah(void);
+void yield_on_pri_change(void);
 
 bool priority_cmp_func (const struct list_elem *a, 
                   const struct list_elem *b, void *aux UNUSED);
