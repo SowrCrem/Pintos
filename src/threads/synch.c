@@ -122,9 +122,17 @@ sema_up (struct semaphore *sema)
 
   old_level = intr_disable ();
   sema->value++;
-  if (!list_empty (&sema->waiters)) 
-    thread_unblock (list_entry (list_pop_front (&sema->waiters),
-                                struct thread, elem));
+  if (!list_empty (&sema->waiters)) {
+    struct thread *t = list_entry (list_pop_front (&sema->waiters),
+                                struct thread, elem);
+    thread_unblock (t);
+    if (intr_context() == INTR_ON && t->priority > thread_current()->priority) {
+      intr_yield_on_return();
+    } else {
+      yield_if_blah();
+    }
+
+  }
                                 
   intr_set_level (old_level);
 }
@@ -212,35 +220,43 @@ lock_acquire (struct lock *lock)
   struct lock *max_lock;
   struct thread *curr = thread_current();
   struct thread *holder;
-  curr->blocked_lock = max_lock = lock;
 
 
   if (!thread_mlfqs)
   {
     holder = lock->holder;
-    struct lock *max_lock = lock;
+    if (holder == NULL) {
 
-    curr->blocked_lock = max_lock;
+      lock->holder = curr;
 
-    while (holder != NULL &&
-           holder->effective_priority < curr->effective_priority)
-    {
-      //Donate the priority to the thread
-      holder->effective_priority = curr->effective_priority;
-      yield_if_blah();
+    } else {
+      struct lock *max_lock = lock;
 
-      //Update the lock's priority if necessary 
-      max_lock->lock_priority =MAX(max_lock->lock_priority, curr->effective_priority);
+      curr->blocked_lock = max_lock;
 
-      if (holder->blocked_lock != NULL)
+      while (holder != NULL &&
+            holder->effective_priority < curr->effective_priority)
       {
-        max_lock = holder->blocked_lock;
-        holder   = max_lock->holder;
+        //Donate the priority to the thread
+        holder->effective_priority = curr->effective_priority;
+        yield_if_blah();
+
+        //Update the lock's priority if necessary 
+        max_lock->lock_priority =MAX(max_lock->lock_priority, curr->effective_priority);
+
+        if (holder->blocked_lock != NULL)
+        {
+          max_lock = holder->blocked_lock;
+          holder   = max_lock->holder;
+        }
+        else 
+          break; //No more priority donations to make 
       }
-      else 
-        break; //No more priority donations to make 
+
+      sema_down (&lock->semaphore);
+
     }
-    sema_down (&lock->semaphore);
+    
     lock->holder = curr;
     holder->blocked_lock = NULL;
   
@@ -296,24 +312,28 @@ lock_release (struct lock *lock)
   ASSERT (lock != NULL);
   ASSERT (lock_held_by_current_thread (lock));
   
+
+  lock->holder = NULL;
+  sema_up (&lock->semaphore);
+
   struct lock *max_lock;
 
   //enum intr_level old_level = intr_disable();
   struct thread *curr = thread_current ();
-  lock->holder = NULL;
-  sema_up (&lock->semaphore);
+
 
   //When a lock is release, we gotta do a few things 
   if (!thread_mlfqs)
   {
-    //remove the lock from the thread's list + reset the lock's priority to min value 
-    list_remove(&lock->lock_elem);
+
     if (!list_empty(&lock->semaphore.waiters)) {
       lock->lock_priority = list_entry(list_max(&lock->semaphore.waiters, &priority_cmp_func, NULL ), struct thread, elem)->effective_priority;
     }
     else
       lock->lock_priority = PRI_MIN -1;
 
+
+     curr->effective_priority = curr->priority;
     if (!list_empty(&curr->lock_acquired))
     {
       //Still holding locks, so need to still reset the effective_priority of lock, but using the other lock's priorities 
@@ -323,18 +343,17 @@ lock_release (struct lock *lock)
       {
         //Gotta set the priority of the max lock_priority now (similar to in lock acquire basically) 
         if (thread_current()->effective_priority < max_lock->lock_priority) {
-        curr->effective_priority = max_lock->lock_priority;
-          yield_if_blah();
+          curr->effective_priority = max_lock->lock_priority;
         }
       }
 
-    }
-    else {
-      //Two options: either has no more locks holding (therefore no more donations) - so back to base priority and done
+          //remove the lock from the thread's list + reset the lock's priority to min value 
+    list_remove(&lock->lock_elem);
 
-      curr->effective_priority = curr->priority;
-      yield_if_blah();
     }
+ 
+    yield_if_blah();
+
   }
   
   //intr_set_level (old_level);

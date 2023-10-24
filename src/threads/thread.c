@@ -122,10 +122,10 @@ thread_init (void)
     initial_thread->nice = 0;
     initial_thread->recent_cpu = INT_TO_FIXED(0);
 	}
-  else {
-    //initial_thread->blocked_lock = NULL;
-    //list_init(&initial_thread->lock_acquired);
-  }
+  // else {
+  //   //initial_thread->blocked_lock = NULL;
+  //   //list_init(&initial_thread->lock_acquired);
+  // }
 }
 
 /* Starts preemptive thread scheduling by enabling interrupts.
