@@ -207,18 +207,17 @@ lock_acquire (struct lock *lock)
   ASSERT (!intr_context ());
   ASSERT (!lock_held_by_current_thread (lock));
 
-  // enum intr_level = intr_disable ();
+  //enum intr_level old_level = intr_disable ();
 
   struct lock *max_lock;
   struct thread *curr = thread_current();
-  struct thread *holder = lock->holder;
+  struct thread *holder;
   curr->blocked_lock = max_lock = lock;
 
 
   if (!thread_mlfqs)
   {
-    struct thread *curr = thread_current();
-    struct thread *holder = lock->holder;
+    holder = lock->holder;
     struct lock *max_lock = lock;
 
     curr->blocked_lock = max_lock;
@@ -228,6 +227,7 @@ lock_acquire (struct lock *lock)
     {
       //Donate the priority to the thread
       holder->effective_priority = curr->effective_priority;
+      yield_if_blah();
 
       //Update the lock's priority if necessary 
       max_lock->lock_priority =MAX(max_lock->lock_priority, curr->effective_priority);
@@ -240,19 +240,23 @@ lock_acquire (struct lock *lock)
       else 
         break; //No more priority donations to make 
     }
+    sema_down (&lock->semaphore);
+    lock->holder = curr;
+    holder->blocked_lock = NULL;
+  
+    list_push_back(&thread_current()->lock_acquired, &lock->lock_elem);
+  }
+  //If mlfqs
+  else 
+  {
+    sema_down (&lock->semaphore);
+    lock->holder = curr;
+    holder->blocked_lock = NULL;
   }
 
-  sema_down (&lock->semaphore);
-  lock->holder = curr;
-  holder->blocked_lock = NULL;
-
   //Once donations done, we add the lock to the thread's list of locks acquired
-  if (!thread_mlfqs)
-    list_push_back(&lock->holder->lock_acquired, &lock->lock_elem);
+  //intr_set_level(old_level);
 
-  // intr_set_level(old_level);
-
-  
 }
 
 
@@ -294,35 +298,46 @@ lock_release (struct lock *lock)
   
   struct lock *max_lock;
 
-  // enum intr_level old_level = intr_disable();
+  //enum intr_level old_level = intr_disable();
   struct thread *curr = thread_current ();
   lock->holder = NULL;
   sema_up (&lock->semaphore);
 
   //When a lock is release, we gotta do a few things 
-    //remove the lock from the thread's list + reset the lock's priority to min value 
-    //Two options: either has no more locks holding (therefore no more donations) - so back to base priority and done
-    //Still holding locks, so need to still reset the effective_priority of lock, but using the other lock's priorities 
-    //Ok so let's find the one on the list iwth max lock_priority (using list_max) and return that list 
-    //Gotta set the priority of the max lock_priority now (similar to in lock acquire basically) 
   if (!thread_mlfqs)
   {
+    //remove the lock from the thread's list + reset the lock's priority to min value 
     list_remove(&lock->lock_elem);
-    lock->lock_priority = PRI_MIN - 1;
+    if (!list_empty(&lock->semaphore.waiters)) {
+      lock->lock_priority = list_entry(list_max(&lock->semaphore.waiters, &priority_cmp_func, NULL ), struct thread, elem)->effective_priority;
+    }
+    else
+      lock->lock_priority = PRI_MIN -1;
+
     if (!list_empty(&curr->lock_acquired))
     {
+      //Still holding locks, so need to still reset the effective_priority of lock, but using the other lock's priorities 
+      //Ok so let's find the one on the list iwth max lock_priority (using list_max) and return that list 
       max_lock = list_entry(list_max(&lock->holder->lock_acquired, &lock_pri_cmp_func, NULL), struct lock, lock_elem);
       if (max_lock->lock_priority != PRI_MIN - 1)
       {
-        if (max_lock->lock_priority != PRI_MIN - 1 && thread_current()->effective_priority < max_lock->lock_priority)
-          thread_yield();
+        //Gotta set the priority of the max lock_priority now (similar to in lock acquire basically) 
+        if (thread_current()->effective_priority < max_lock->lock_priority) {
         curr->effective_priority = max_lock->lock_priority;
+          yield_if_blah();
+        }
       }
+
     }
-    else
+    else {
+      //Two options: either has no more locks holding (therefore no more donations) - so back to base priority and done
+
       curr->effective_priority = curr->priority;
+      yield_if_blah();
+    }
   }
-  // intr_set_level (old_level);
+  
+  //intr_set_level (old_level);
 }
 
 

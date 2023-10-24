@@ -123,8 +123,8 @@ thread_init (void)
     initial_thread->recent_cpu = INT_TO_FIXED(0);
 	}
   else {
-    initial_thread->blocked_lock = NULL;
-    list_init(&initial_thread->lock_acquired);
+    //initial_thread->blocked_lock = NULL;
+    //list_init(&initial_thread->lock_acquired);
   }
 }
 
@@ -256,8 +256,8 @@ thread_create (const char *name, int priority, thread_func *function,
     thread_yield ();
   }
   else {
-    list_init(&t->lock_acquired);
-    t->blocked_lock = NULL;
+    // list_init(&t->lock_acquired);
+    // t->blocked_lock = NULL;
   }
   
 
@@ -420,10 +420,10 @@ thread_set_priority (int new_priority)
 
       /* Don't update effective priority if priority donations
         are present AND new_priority < effective priority. */
-      if (list_empty (&cur->donated_priorities))
-        cur->effective_priority = new_priority;
-      else if (new_priority > cur->effective_priority)
-        cur->effective_priority = new_priority;
+      // if (list_empty (&cur->donated_priorities))
+      //   cur->effective_priority = new_priority;
+      // else if (new_priority > cur->effective_priority)
+      //   cur->effective_priority = new_priority;
 
       /* Check if new_priority is less than priority of
         front of ready_list. */
@@ -464,11 +464,23 @@ thread_set_nice (int new_nice UNUSED)
   ASSERT(thread_mlfqs);
   thread_current()->nice = new_nice;
   update_thread_priority(thread_current(), NULL);
+  yield_if_blah();
+
+}
+
+void yield_if_blah(void)
+{
   struct thread * next = list_entry (list_max 
     (&ready_list, &priority_cmp_func, NULL), struct thread, elem);
-  if(thread_current()->priority < next->priority)
+  if (thread_mlfqs)
+  {
+    if(thread_current()->priority < next->priority)
     thread_yield ();
-
+  } else {
+    if(thread_current()->effective_priority < next->effective_priority)
+    thread_yield ();
+  }
+  
 }
 
 /* Returns the current thread's nice value. */
@@ -582,7 +594,6 @@ init_thread (struct thread *t, const char *name, int priority)
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
-  /* Effective priority initialized to priority. */
   t->effective_priority = priority;
   t->magic = THREAD_MAGIC;
 
@@ -590,12 +601,10 @@ init_thread (struct thread *t, const char *name, int priority)
   if (thread_mlfqs) {
     update_thread_priority(t, NULL);
   }
-  else 
-  {
-    t->priority = priority;
-    /* Initialize the donated priorities list. */
-    list_init(&t->donated_priorities);
-  }
+  
+  /* Initialize the donated priorities list. */
+  t->blocked_lock = NULL;
+  list_init(&t->lock_acquired);
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);

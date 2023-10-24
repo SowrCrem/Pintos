@@ -89,7 +89,6 @@ struct thread
     uint8_t *stack;                     /* Saved stack pointer. */
     int priority;                       /* Priority. */
     int effective_priority;             /* Effective priority. */
-    struct list donated_priorities;     /* List of donated priorities to thread. */
     struct list_elem allelem;           /* List element for all threads list. */
 
     /* Shared between thread.c and synch.c. */
@@ -156,7 +155,7 @@ void update_thread_priority (struct thread *t, void *aux);
 void update_recent_cpu (struct thread *t, void *aux);
 void update_load_avg(void);
 
-
+void yield_if_blah(void);
 
 bool priority_cmp_func (const struct list_elem *a, 
                   const struct list_elem *b, void *aux UNUSED);
