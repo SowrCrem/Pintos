@@ -97,6 +97,8 @@ struct thread
     struct list_elem mlf_elem;          /* MLF Elem for MLFQ scheduling */
     int32_t recent_cpu;                 /* Recent CPU for MLFQ scheduling */
     int nice;                           /* Niceness for MLFQ scheduling */
+    struct list lock_acquired;
+    struct lock *blocked_lock;
 
 
 

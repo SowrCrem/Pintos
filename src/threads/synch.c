@@ -32,6 +32,9 @@
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 
+#define MAX(a, b) ((a > b) ? (a) : (b))
+
+
 
 /* Initializes semaphore SEMA to VALUE.  A semaphore is a
    nonnegative integer along with two atomic operators for
@@ -79,6 +82,7 @@ sema_down (struct semaphore *sema)
   intr_set_level (old_level);
 }
 
+
 /* Down or "P" operation on a semaphore, but only if the
    semaphore is not already 0.  Returns true if the semaphore is
    decremented, false otherwise.
@@ -124,6 +128,8 @@ sema_up (struct semaphore *sema)
                                 
   intr_set_level (old_level);
 }
+
+
 
 static void sema_test_helper (void *sema_);
 
@@ -201,12 +207,54 @@ lock_acquire (struct lock *lock)
   ASSERT (!intr_context ());
   ASSERT (!lock_held_by_current_thread (lock));
 
-  /* TODO:
-     If holder.priority less than cur.priority, then donate 
-     cur.priority to holder -> update holder priority -> yield */
+  // enum intr_level = intr_disable ();
+
+  struct lock *max_lock;
+  struct thread *curr = thread_current();
+  struct thread *holder = lock->holder;
+  curr->blocked_lock = max_lock = lock;
+
+
+  if (!thread_mlfqs)
+  {
+    struct thread *curr = thread_current();
+    struct thread *holder = lock->holder;
+    struct lock *max_lock = lock;
+
+    curr->blocked_lock = max_lock;
+
+    while (holder != NULL &&
+           holder->effective_priority < curr->effective_priority)
+    {
+      //Donate the priority to the thread
+      holder->effective_priority = curr->effective_priority;
+
+      //Update the lock's priority if necessary 
+      max_lock->lock_priority =MAX(max_lock->lock_priority, curr->effective_priority);
+
+      if (holder->blocked_lock != NULL)
+      {
+        max_lock = holder->blocked_lock;
+        holder   = max_lock->holder;
+      }
+      else 
+        break; //No more priority donations to make 
+    }
+  }
+
   sema_down (&lock->semaphore);
-  lock->holder = thread_current ();
+  lock->holder = curr;
+  holder->blocked_lock = NULL;
+
+  //Once donations done, we add the lock to the thread's list of locks acquired
+  if (!thread_mlfqs)
+    list_push_back(&lock->holder->lock_acquired, &lock->lock_elem);
+
+  // intr_set_level(old_level);
+
+  
 }
+
 
 /* Tries to acquires LOCK and returns true if successful or false
    on failure.  The lock must not already be held by the current
@@ -224,9 +272,14 @@ lock_try_acquire (struct lock *lock)
 
   success = sema_try_down (&lock->semaphore);
   if (success)
+  {
     lock->holder = thread_current ();
+    if (!thread_mlfqs)
+      list_push_back(&lock->holder->lock_acquired, &lock->lock_elem);
+  }
   return success;
 }
+
 
 /* Releases LOCK, which must be owned by the current thread.
 
@@ -238,14 +291,53 @@ lock_release (struct lock *lock)
 {
   ASSERT (lock != NULL);
   ASSERT (lock_held_by_current_thread (lock));
+  
+  struct lock *max_lock;
 
-  /* TODO: (holder is current thread)
-     If holder's donated priority list not empty, remove highest
-     priority from donated list -> update holder priority -> yield */
-  struct thread *cur = thread_current ();
+  // enum intr_level old_level = intr_disable();
+  struct thread *curr = thread_current ();
   lock->holder = NULL;
   sema_up (&lock->semaphore);
+
+  //When a lock is release, we gotta do a few things 
+    //remove the lock from the thread's list + reset the lock's priority to min value 
+    //Two options: either has no more locks holding (therefore no more donations) - so back to base priority and done
+    //Still holding locks, so need to still reset the effective_priority of lock, but using the other lock's priorities 
+    //Ok so let's find the one on the list iwth max lock_priority (using list_max) and return that list 
+    //Gotta set the priority of the max lock_priority now (similar to in lock acquire basically) 
+  if (!thread_mlfqs)
+  {
+    list_remove(&lock->lock_elem);
+    lock->lock_priority = PRI_MIN - 1;
+    if (!list_empty(&curr->lock_acquired))
+    {
+      max_lock = list_entry(list_max(&lock->holder->lock_acquired, &lock_pri_cmp_func, NULL), struct lock, lock_elem);
+      if (max_lock->lock_priority != PRI_MIN - 1)
+      {
+        if (max_lock->lock_priority != PRI_MIN - 1 && thread_current()->effective_priority < max_lock->lock_priority)
+          thread_yield();
+        curr->effective_priority = max_lock->lock_priority;
+      }
+    }
+    else
+      curr->effective_priority = curr->priority;
+  }
+  // intr_set_level (old_level);
 }
+
+
+
+
+bool 
+lock_pri_cmp_func (const struct list_elem *a, 
+                  const struct list_elem *b, void *aux UNUSED)
+{
+  const struct lock *a_lock = list_entry(a, struct lock, lock_elem);
+  const struct lock *b_lock = list_entry(b, struct lock, lock_elem);
+
+  return (a_lock->lock_priority < b_lock->lock_priority);
+}
+
 
 /* Returns true if the current thread holds LOCK, false
    otherwise.  (Note that testing whether some other thread holds

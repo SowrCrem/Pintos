@@ -122,6 +122,10 @@ thread_init (void)
     initial_thread->nice = 0;
     initial_thread->recent_cpu = INT_TO_FIXED(0);
 	}
+  else {
+    initial_thread->blocked_lock = NULL;
+    list_init(&initial_thread->lock_acquired);
+  }
 }
 
 /* Starts preemptive thread scheduling by enabling interrupts.
@@ -250,6 +254,10 @@ thread_create (const char *name, int priority, thread_func *function,
     t->nice = thread_get_nice();
     if(t->priority > thread_current()->priority)
     thread_yield ();
+  }
+  else {
+    list_init(&t->lock_acquired);
+    t->blocked_lock = NULL;
   }
   
 
