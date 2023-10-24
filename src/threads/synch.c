@@ -215,22 +215,21 @@ lock_acquire (struct lock *lock)
   ASSERT (!intr_context ());
   ASSERT (!lock_held_by_current_thread (lock));
 
-  //enum intr_level old_level = intr_disable ();
+  enum intr_level old_level = intr_disable ();
 
   struct lock *max_lock;
   struct thread *curr = thread_current();
-  struct thread *holder;
+  struct thread *holder = lock->holder;
 
 
   if (!thread_mlfqs)
   {
-    holder = lock->holder;
     if (holder == NULL) {
 
       lock->holder = curr;
 
     } else {
-      struct lock *max_lock = lock;
+      max_lock = lock;
 
       curr->blocked_lock = max_lock;
 
@@ -253,10 +252,9 @@ lock_acquire (struct lock *lock)
           break; //No more priority donations to make 
       }
 
-      sema_down (&lock->semaphore);
 
     }
-    
+    sema_down (&lock->semaphore);
     lock->holder = curr;
     holder->blocked_lock = NULL;
   
@@ -271,7 +269,7 @@ lock_acquire (struct lock *lock)
   }
 
   //Once donations done, we add the lock to the thread's list of locks acquired
-  //intr_set_level(old_level);
+  intr_set_level(old_level);
 
 }
 
@@ -318,7 +316,7 @@ lock_release (struct lock *lock)
 
   struct lock *max_lock;
 
-  //enum intr_level old_level = intr_disable();
+  enum intr_level old_level = intr_disable();
   struct thread *curr = thread_current ();
 
 
@@ -333,7 +331,7 @@ lock_release (struct lock *lock)
       lock->lock_priority = PRI_MIN -1;
 
 
-     curr->effective_priority = curr->priority;
+    curr->effective_priority = curr->priority;
     if (!list_empty(&curr->lock_acquired))
     {
       //Still holding locks, so need to still reset the effective_priority of lock, but using the other lock's priorities 
@@ -346,17 +344,14 @@ lock_release (struct lock *lock)
           curr->effective_priority = max_lock->lock_priority;
         }
       }
-
-          //remove the lock from the thread's list + reset the lock's priority to min value 
-    list_remove(&lock->lock_elem);
-
     }
- 
+     //remove the lock from the thread's list + reset the lock's priority to min value 
+    list_remove(&lock->lock_elem);
     yield_if_blah();
 
   }
   
-  //intr_set_level (old_level);
+  intr_set_level (old_level);
 }
 
 
