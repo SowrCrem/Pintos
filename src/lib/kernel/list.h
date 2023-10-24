@@ -173,8 +173,6 @@ void list_insert_ordered (struct list *, struct list_elem *,
                           list_less_func *, void *aux);
 void list_unique (struct list *, struct list *duplicates,
                   list_less_func *, void *aux);
-struct list_elem list_remove_ordered (struct list *list, 
-                  list_less_func *less, void *aux);
 
 /* Max and min. */
 struct list_elem *list_max (struct list *, list_less_func *, void *aux);
