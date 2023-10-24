@@ -254,6 +254,17 @@ list_remove (struct list_elem *elem)
   return elem->next;
 }
 
+struct list_elem
+list_remove_ordered(struct list *list, list_less_func *less, void *aux)
+{
+    ASSERT (list != NULL);
+    ASSERT (less != NULL);
+   
+    struct list_elem *elem = list_max (list, less, aux);
+    list_remove (elem);
+    return *elem;            
+}
+
 /* Removes the front element from LIST and returns it.
    Undefined behavior if LIST is empty before removal. */
 struct list_elem *

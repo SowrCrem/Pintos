@@ -2,6 +2,9 @@
     "files.associations": {
         "timer.h": "c",
         "thread.h": "c",
-        "vaddr.h": "c"
+        "vaddr.h": "c",
+        "__mutex_base": "c",
+        "mutex": "c",
+        "list.h": "c"
     }
 }

@@ -51,15 +51,6 @@ struct kernel_thread_frame
 
 static int32_t LOAD_AVG;
 
-/* Element structure for integer lists. 
-   
-   SS */
-struct int_element
-  {
-    int value;                  /* Integer element value.*/
-    struct list_elem int_elem;  /* Integer list element. */
-  };
-
 /* Statistics. */
 static long long idle_ticks;    /* # of timer ticks spent idle. */
 static long long kernel_ticks;  /* # of timer ticks in kernel threads. */
@@ -110,9 +101,9 @@ thread_init (void)
   lock_init (&tid_lock);
   list_init (&ready_list);
   list_init (&all_list);
-
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();
+  //list_init(&initial_thread->locks_acquired);
   init_thread (initial_thread, "main", PRI_DEFAULT);
   initial_thread->status = THREAD_RUNNING;
   initial_thread->tid = allocate_tid ();
@@ -122,6 +113,7 @@ thread_init (void)
     initial_thread->nice = 0;
     initial_thread->recent_cpu = INT_TO_FIXED(0);
 	}
+  
 }
 
 /* Starts preemptive thread scheduling by enabling interrupts.
@@ -219,6 +211,7 @@ thread_create (const char *name, int priority, thread_func *function,
   /* Initialize thread. */
   init_thread (t, name, priority);
   tid = t->tid = allocate_tid ();
+  list_init(&t->locks_acquired);
 
   /* Prepare thread for first run by initializing its stack.
      Do this atomically so intermediate values for the 'stack' 
@@ -250,6 +243,11 @@ thread_create (const char *name, int priority, thread_func *function,
     t->nice = thread_get_nice();
     if(t->priority > thread_current()->priority)
     thread_yield ();
+  }
+  else {
+    t->effective_priority = priority;
+    t->priority = priority;
+    t->blocked_lock = NULL;
   }
   
 
@@ -410,13 +408,6 @@ thread_set_priority (int new_priority)
     {
       cur->priority = new_priority;
 
-      /* Don't update effective priority if priority donations
-        are present AND new_priority < effective priority. */
-      if (list_empty (&cur->donated_priorities))
-        cur->effective_priority = new_priority;
-      else if (new_priority > cur->effective_priority)
-        cur->effective_priority = new_priority;
-
       /* Check if new_priority is less than priority of
         front of ready_list. */
       if (!list_empty (&ready_list))
@@ -427,7 +418,7 @@ thread_set_priority (int new_priority)
           thread_yield ();
         }
       }
-    } else    // If invalid priority - set to default priority
+    } else  
     {
       printf("Invalid priority\n");
       thread_current ()->priority = PRI_DEFAULT;
@@ -446,7 +437,7 @@ thread_get_priority (void)
   if (thread_mlfqs)
     return thread_current()->priority;
   else 
-    return update_donate_thread_priority(thread_current());
+    return thread_current()->effective_priority;
 }
 
 /* Sets the current thread's nice value to NICE. */
@@ -579,14 +570,14 @@ init_thread (struct thread *t, const char *name, int priority)
   t->magic = THREAD_MAGIC;
 
   /* Calculate thread priority if mlfqs is being used otherwise use value passed on */
-  if (thread_mlfqs) {
+  if (thread_mlfqs)
     update_thread_priority(t, NULL);
-  }
   else 
   {
     t->priority = priority;
-    /* Initialize the donated priorities list. */
-    list_init(&t->donated_priorities);
+    t->effective_priority = priority;
+    t->blocked_lock = NULL;
+    list_init(&t->locks_acquired);
   }
 
   old_level = intr_disable ();
@@ -799,27 +790,3 @@ priority_cmp_func(const struct list_elem *a, const struct list_elem *b,
 }
 
 
-/* TODO: Add current thread's (highest) priority to OTHER thread's
-   donated priorities list. Then update OTHER thread's effective
-   priority. Then yield current thread.
-   
-   HH SS */
-int
-update_donate_thread_priority (struct thread *t)
-{
-  int max_priority = PRI_MIN;
-  if (!list_empty(t->donated_priorities))
-  {
-    int temp_max;
-    struct thread *ptr;
-    for (ptr = list_begin(t->donated_priorities); ptr != list_end(t->donated_priorities); ptr = list_next(ptr))
-    {
-      int temp_max = update_donate_thread_priority(ptr);
-      if (max_priority < temp_max)
-        max_priority = temp_max;
-    }
-  }
-  else 
-    return t->effective_priority;
-
-}

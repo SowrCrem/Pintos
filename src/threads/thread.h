@@ -89,16 +89,17 @@ struct thread
     uint8_t *stack;                     /* Saved stack pointer. */
     int priority;                       /* Priority. */
     int effective_priority;             /* Effective priority. */
-    struct list donated_priorities;     /* List of donated priorities to thread. */
     struct list_elem allelem;           /* List element for all threads list. */
 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
     struct list_elem mlf_elem;          /* MLF Elem for MLFQ scheduling */
+
     int32_t recent_cpu;                 /* Recent CPU for MLFQ scheduling */
     int nice;                           /* Niceness for MLFQ scheduling */
-    struct list *donated_priorities;
+
     struct lock *blocked_lock;
+    struct list locks_acquired;
 
 
 
@@ -162,5 +163,4 @@ bool priority_cmp_func (const struct list_elem *a,
                   const struct list_elem *b, void *aux UNUSED);
 
 
-void donate_priority (struct thread *other UNUSED);
 #endif /* threads/thread.h */
