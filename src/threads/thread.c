@@ -480,7 +480,6 @@ void yield_on_pri_change(void)
     if(thread_current()->effective_priority < next->effective_priority)
     thread_yield ();
   }
-  
 }
 
 /* Returns the current thread's nice value. */
@@ -815,14 +814,3 @@ priority_cmp_func(const struct list_elem *a, const struct list_elem *b,
     return (a_thread->effective_priority > b_thread->effective_priority);
 }
 
-
-/* TODO: Add current thread's (highest) priority to OTHER thread's
-   donated priorities list. Then update OTHER thread's effective
-   priority. Then yield current thread.
-   
-   HH SS */
-void
-donate_priority (struct thread *other UNUSED)
-{
-
-}

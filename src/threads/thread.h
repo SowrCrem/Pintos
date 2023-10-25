@@ -161,5 +161,4 @@ bool priority_cmp_func (const struct list_elem *a,
                   const struct list_elem *b, void *aux UNUSED);
 
 
-void donate_priority (struct thread *other UNUSED);
 #endif /* threads/thread.h */

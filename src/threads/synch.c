@@ -72,7 +72,10 @@ sema_down (struct semaphore *sema)
   old_level = intr_disable ();
   while (sema->value == 0) 
     {
-      list_insert_ordered (&sema->waiters, &thread_current ()->elem, *priority_cmp_func, NULL);
+      if (thread_mlfqs)
+        list_push_back(&sema->waiters, &thread_current ()->elem);
+      else
+        list_insert_ordered (&sema->waiters, &thread_current ()->elem, *priority_cmp_func, NULL);
       thread_block ();
     }
   sema->value--;
@@ -218,10 +221,13 @@ lock_init (struct lock *lock)
 void
 lock_acquire (struct lock *lock)
 {
-  printf("Entering lock_acquire\n");
+  // printf("Entering lock_acquire\n");
   ASSERT (lock != NULL);
+    // printf("lock is not null: %s\n", (lock != NULL) ? "true" : "false"); //giving true
   ASSERT (!intr_context ());
+  // printf("lock_held_by_current_thread: %s\n", !lock_held_by_current_thread(lock) ? "true" : "false"); //giving true
   ASSERT (!lock_held_by_current_thread (lock));
+  // printf("lock_held_by_current_thread: %s\n", !lock_held_by_current_thread(lock) ? "true" : "false"); //giving true
 
   enum intr_level old_level = intr_disable ();
 
@@ -234,14 +240,22 @@ lock_acquire (struct lock *lock)
   curr->blocked_lock = max_lock = lock;
 
 
-  printf("Before entering if loop\n");
+  // printf("Before entering if loop\n");
   if (!thread_mlfqs)
   {
-      printf("Before entering while loop\n");
+
+      int nested_depth = 0;
+      // printf("Before entering while loop\n");
       while (holder != NULL &&
             holder->effective_priority < curr->effective_priority)
       {
-        printf("Donation occurring \n");
+        // printf("nested depth = %d/n", nested_depth);
+        //if (nested_depth > 7)
+        // {
+        //   break;
+        // }
+        // else {
+          // printf("Donation occurring \n");
         //Donate the priority to the thread
         holder->effective_priority = curr->effective_priority;
         yield_on_pri_change();
@@ -253,18 +267,21 @@ lock_acquire (struct lock *lock)
         {
           max_lock = holder->blocked_lock;
           holder   = holder->blocked_lock->holder;
+          nested_depth++;
         }
         else 
           break; //No more priority donations to make 
-      }
-      printf("Exiting while loop\n");
+
+        }
+      // printf("nested depth = %d/n", nested_depth);
+      // printf("Exiting while loop\n");
     sema_down (&lock->semaphore);
     lock->holder = curr;
     curr->blocked_lock = NULL;
-    printf("Before adding to list\n");
+    // printf("Before adding to list\n");
     if (!thread_mlfqs)
-      list_push_back(&thread_current()->lock_acquired, &lock->lock_elem);
-    printf("After adding to list\n");
+      list_push_back(&curr->lock_acquired, &lock->lock_elem);
+    // printf("After adding to list\n");
   }
   //If mlfqs
   else 
@@ -275,7 +292,7 @@ lock_acquire (struct lock *lock)
   }
 
   intr_set_level(old_level);
-  printf("After disabling interrupts\n");
+  // printf("After disabling interrupts\n");
 
 
 }
@@ -316,61 +333,62 @@ lock_release (struct lock *lock)
 {
   ASSERT (lock != NULL);
   ASSERT (lock_held_by_current_thread (lock));
+  // printf("lock_held_by_current_thread: %s\n", lock_held_by_current_thread(lock) ? "true" : "false"); //giving true
   struct lock *max_lock;
-  printf("Entering lock release function\n");
+  // printf("Entering lock release function\n");
   enum intr_level old_level = intr_disable();
   struct thread *curr = thread_current ();
 
   lock->holder = NULL;
   sema_up (&lock->semaphore);  
-  printf("Before entering if statement\n");
+  // printf("Before entering if statement\n");
   //When a lock is release, we gotta do a few things 
   if (!thread_mlfqs)
   {
-    printf("After entering if statement\n");
+    // printf("After entering if statement\n");
     if (!list_empty(&lock->semaphore.waiters)) {
-      printf("Taking 2nd maximum priority\n");
+      // printf("Taking 2nd maximum priority\n");
       lock->lock_priority = list_entry(list_max(&lock->semaphore.waiters, &priority_cmp_func, NULL ), struct thread, elem)->effective_priority;
-      printf("Going through list max\n");
+      // printf("Going through list max\n");
     }
     else {
-      printf("resetting priority to default\n");
+      // printf("resetting priority to default\n");
       lock->lock_priority = PRI_MIN -1;
     }
 
-    printf("Before checking lock list is empty\n");
+    // printf("Before checking lock list is empty\n");
     if (!list_empty(&curr->lock_acquired))
     {
-      printf("Before getting max value of list\n");
+      // printf("Before getting max value of list\n");
       max_lock = list_entry(list_max(&curr->lock_acquired, &lock_pri_cmp_func, NULL), struct lock, lock_elem);
-      printf("After getting max value of list\n");
+      // printf("After getting max value of list\n");
       if (max_lock->lock_priority != PRI_MIN - 1)
       {
-        printf("checking if the lock priority is not default\n");
+        // printf("checking if the lock priority is not default\n");
         //Gotta set the priority of the max lock_priority now (similar to in lock acquire basically) 
-        if (thread_current()->effective_priority < max_lock->lock_priority) {
-          printf("Resetting lock's priority to second highest\n");
+        if (curr->effective_priority < max_lock->lock_priority) {
+          // printf("Resetting lock's priority to second highest\n");
           curr->effective_priority = max_lock->lock_priority;
           yield_on_pri_change();
         }
       }
       else {
-          printf("default case where pri = PRI_MIN - 1\n");
+          // printf("default case where pri = PRI_MIN - 1\n");
           curr->effective_priority = curr->priority;
         }
     }
      //remove the lock from the thread's list + reset the lock's priority to min value 
-    printf("Removing element from lock list\n");
+    // printf("Removing element from lock list\n");
     list_remove(&lock->lock_elem);
-    printf("Completing yield change\n");
+    // printf("Completing yield change\n");
     yield_on_pri_change();
 
-    printf("before disabling interrupts\n");
+    // printf("before disabling interrupts\n");
 
   }
   
   intr_set_level (old_level);
-  printf("Complete lock release\n");
+  // printf("Complete lock release\n");
 }
 
 
