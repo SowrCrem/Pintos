@@ -51,15 +51,6 @@ struct kernel_thread_frame
 
 static int32_t LOAD_AVG;
 
-/* Element structure for integer lists. 
-   
-   SS */
-struct int_element
-  {
-    int value;                  /* Integer element value.*/
-    struct list_elem int_elem;  /* Integer list element. */
-  };
-
 /* Statistics. */
 static long long idle_ticks;    /* # of timer ticks spent idle. */
 static long long kernel_ticks;  /* # of timer ticks in kernel threads. */
@@ -122,10 +113,10 @@ thread_init (void)
     initial_thread->nice = 0;
     initial_thread->recent_cpu = INT_TO_FIXED(0);
 	}
-  // else {
-  //   //initial_thread->blocked_lock = NULL;
-  //   //list_init(&initial_thread->lock_acquired);
-  // }
+  else {
+    initial_thread->blocked_lock = NULL;
+    list_init(&initial_thread->lock_acquired);
+  }
 }
 
 /* Starts preemptive thread scheduling by enabling interrupts.
@@ -418,15 +409,11 @@ thread_set_priority (int new_priority)
     {
       cur->priority = new_priority;
 
-      /* Don't update effective priority if priority donations
-        are present AND new_priority < effective priority. */
-      // if (list_empty (&cur->donated_priorities))
-      //   cur->effective_priority = new_priority;
-      // else if (new_priority > cur->effective_priority)
-      //   cur->effective_priority = new_priority;
+      
+      if (new_priority > cur->effective_priority)
+        cur->effective_priority = new_priority;
 
-      /* Check if new_priority is less than priority of
-        front of ready_list. */
+      /* Check if new_priority is less than priority of front of ready_list. */
       if (!list_empty (&ready_list))
       {
         struct thread *t_front = list_entry (list_front (&ready_list), struct thread, elem);
@@ -435,16 +422,11 @@ thread_set_priority (int new_priority)
           thread_yield ();
         }
       }
-    } else    // If invalid priority - set to default priority
-    {
-      printf("Invalid priority\n");
-      thread_current ()->priority = PRI_DEFAULT;
-    }
+    } else 
+        thread_current ()->priority = PRI_DEFAULT;
   }
   else 
-  {
-  thread_current ()->priority = new_priority;
-  }
+    thread_current ()->priority = new_priority;
 }
 
 /* Returns the current thread's EFFECTIVE priority. */
@@ -600,10 +582,10 @@ init_thread (struct thread *t, const char *name, int priority)
   if (thread_mlfqs) {
     update_thread_priority(t, NULL);
   }
-  
-  /* Initialize the donated priorities list. */
-  t->blocked_lock = NULL;
-  list_init(&t->lock_acquired);
+  else {
+    t->blocked_lock = NULL;
+    list_init(&t->lock_acquired);
+  }
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
