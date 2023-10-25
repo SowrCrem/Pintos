@@ -409,8 +409,9 @@ thread_set_priority (int new_priority)
     {
       cur->priority = new_priority;
 
-      
-      if (new_priority > cur->effective_priority)
+      if (list_empty(&cur->lock_acquired))
+        cur->effective_priority = new_priority;
+      else if (new_priority > cur->effective_priority)
         cur->effective_priority = new_priority;
 
       /* Check if new_priority is less than priority of front of ready_list. */
