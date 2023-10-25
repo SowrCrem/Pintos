@@ -139,31 +139,31 @@ void
 sema_up (struct semaphore *sema) 
 {
   enum intr_level old_level;
-  // int new_prio  = 0;
-  // int curr_prio = 0;
+  int new_prio  = 0;
+  int curr_prio = 0;
 
   ASSERT (sema != NULL);
-  //struct thread *t = NULL;
+  struct thread *t ;
 
   old_level = intr_disable ();
   sema->value++;
   if (!list_empty (&sema->waiters)) {
     //Removing the thread with maximum priority
-    thread_unblock (list_entry(list_pop_front(&sema->waiters), struct thread, elem));
-    // thread_unblock(t);
-    // curr_prio = thread_get_priority();
-    // new_prio  = t->effective_priority;
+    t = (list_entry(list_pop_front(&sema->waiters), struct thread, elem));
+    thread_unblock(t);
+    curr_prio = thread_get_priority();
+    new_prio  = t->effective_priority;
     
   }
   intr_set_level (old_level);
 
-  // if (curr_prio < new_prio)
-  // {
-  //   if (intr_context())
-  //     intr_yield_on_return();
-  //   else
-  //     thread_yield();
-  // }
+  if (curr_prio < new_prio)
+  {
+    if (intr_context())
+      intr_yield_on_return();
+    else
+      thread_yield();
+  }
 }
 
 // void
@@ -256,61 +256,6 @@ lock_init (struct lock *lock)
    interrupt handler.  This function may be called with
    interrupts disabled, but interrupts will be turned back on if
    we need to sleep. */
-// void
-// lock_acquire (struct lock *lock)
-// {
-//   ASSERT (lock != NULL);
-//   ASSERT (!intr_context ());
-//   ASSERT (!lock_held_by_current_thread (lock));
-
-//   enum intr_level old_level = intr_disable ();
-
-//   struct thread *curr, *holder;
-//   struct lock *max_lock;
-
-
-//   curr = thread_current();
-
-
-//   if (!thread_mlfqs)
-//   {
-//     holder = lock->holder;
-//     curr->blocked_lock = max_lock = lock;
-
-//     while (holder != NULL &&
-//         holder->effective_priority < curr->effective_priority)
-//     {
-//       holder->effective_priority = curr->effective_priority;
-//       yield_on_pri_change();
-
-//       //Update the lock's priority if necessary 
-//       max_lock->lock_priority = MAX(max_lock->lock_priority, curr->effective_priority);
-
-//       if (holder->status == THREAD_BLOCKED && holder->blocked_lock != NULL)
-//       {
-//         max_lock = holder->blocked_lock;
-//         holder   = holder->blocked_lock->holder;
-//       }
-//       else 
-//         break;
-
-//       }
-//     sema_down (&lock->semaphore);
-//     lock->holder = curr;
-//     curr->blocked_lock = NULL;
-//     if (!thread_mlfqs)
-//       list_push_back(&curr->lock_acquired, &lock->lock_elem);
-//   }
-//   //If mlfqs
-//   else 
-//   {
-//     sema_down (&lock->semaphore);
-//     lock->holder = curr;
-//   }
-
-//   intr_set_level(old_level);
-
-// }
 void
 lock_acquire (struct lock *lock)
 {
@@ -318,12 +263,65 @@ lock_acquire (struct lock *lock)
   ASSERT (!intr_context ());
   ASSERT (!lock_held_by_current_thread (lock));
 
-  /* TODO:
-     If holder.priority less than cur.priority, then donate 
-     cur.priority to holder -> update holder priority -> yield */
-  sema_down (&lock->semaphore);
-  lock->holder = thread_current ();
+  enum intr_level old_level = intr_disable ();
+
+  struct thread *curr, *holder;
+  struct lock *max_lock;
+
+  curr = thread_current();
+
+  if (!thread_mlfqs)
+  {
+    holder = lock->holder;
+    curr->blocked_lock = max_lock = lock;
+
+    while (holder != NULL &&
+        holder->effective_priority < curr->effective_priority)
+    {
+      holder->effective_priority = curr->effective_priority;
+      yield_on_pri_change();
+
+      //Update the lock's priority if necessary 
+      max_lock->lock_priority = MAX(max_lock->lock_priority, curr->effective_priority);
+
+      if (holder->status == THREAD_BLOCKED && holder->blocked_lock != NULL)
+      {
+        max_lock = holder->blocked_lock;
+        holder   = holder->blocked_lock->holder;
+      }
+      else 
+        break;
+
+      }
+    sema_down (&lock->semaphore);
+    lock->holder = curr;
+    curr->blocked_lock = NULL;
+    if (!thread_mlfqs)
+      list_push_back(&curr->lock_acquired, &lock->lock_elem);
+  }
+  //If mlfqs
+  else 
+  {
+    sema_down (&lock->semaphore);
+    lock->holder = curr;
+  }
+
+  intr_set_level(old_level);
+
 }
+// void
+// lock_acquire (struct lock *lock)
+// {
+//   ASSERT (lock != NULL);
+//   ASSERT (!intr_context ());
+//   ASSERT (!lock_held_by_current_thread (lock));
+
+//   /* TODO:
+//      If holder.priority less than cur.priority, then donate 
+//      cur.priority to holder -> update holder priority -> yield */
+//   sema_down (&lock->semaphore);
+//   lock->holder = thread_current ();
+// }
 
 
 
@@ -357,64 +355,65 @@ lock_try_acquire (struct lock *lock)
    An interrupt handler cannot acquire a lock, so it does not
    make sense to try to release a lock within an interrupt
    handler. */
-// void
-// lock_release (struct lock *lock) 
-// {
-//   ASSERT (lock != NULL);
-//   ASSERT (lock_held_by_current_thread (lock));
-//   struct lock *max_lock;
-//   enum intr_level old_level = intr_disable();
-//   struct thread *curr = thread_current ();
-
-//   lock->holder = NULL;
-//   sema_up (&lock->semaphore);  
-  
-//   //When a lock is release, we gotta do a few things 
-//   if (!thread_mlfqs)
-//   {
-//     list_remove(&lock->lock_elem);
-    
-//     if (!list_empty(&lock->semaphore.waiters)) {
-//       lock->lock_priority = list_entry(list_front(&lock->semaphore.waiters), struct thread, elem)->effective_priority;
-//     }
-//     else {
-//       lock->lock_priority = PRI_MIN -1;
-//     }
-
-//     if (!list_empty(&curr->lock_acquired))
-//     {
-//       max_lock = list_entry(list_max(&curr->lock_acquired, &lock_pri_cmp_func, NULL), struct lock, lock_elem);
-//       if (max_lock->lock_priority != PRI_MIN - 1)
-//       {
-//         //Gotta set the priority of the max lock_priority now (similar to in lock acquire basically) 
-//         if (curr->effective_priority < max_lock->lock_priority) {
-//           curr->effective_priority = max_lock->lock_priority;
-//           yield_on_pri_change();
-//         }
-//       }
-//       else {
-//           curr->effective_priority = curr->priority;
-//         }
-//     }
-    
-//     yield_on_pri_change(); //may need to move
-//   }
-  
-//   intr_set_level (old_level);
-// }
 void
 lock_release (struct lock *lock) 
 {
   ASSERT (lock != NULL);
   ASSERT (lock_held_by_current_thread (lock));
+  struct lock *max_lock;
+  enum intr_level old_level = intr_disable();
+  struct thread *curr = thread_current ();
 
-  /* TODO: (holder is current thread)
-     If holder's donated priority list not empty, remove highest
-     priority from donated list -> update holder priority -> yield */
-  //struct thread *cur = thread_current ();
   lock->holder = NULL;
-  sema_up (&lock->semaphore);
+  sema_up (&lock->semaphore);  
+  
+  //When a lock is release, we gotta do a few things 
+  if (!thread_mlfqs)
+  {
+    list_remove(&lock->lock_elem);
+    
+    if (!list_empty(&lock->semaphore.waiters)) {
+      lock->lock_priority = list_entry(list_front(&lock->semaphore.waiters), struct thread, elem)->effective_priority;
+
+    }
+    else {
+      lock->lock_priority = PRI_MIN -1;
+    }
+
+    if (!list_empty(&curr->lock_acquired))
+    {
+      max_lock = list_entry(list_max(&curr->lock_acquired, &lock_pri_cmp_func, NULL), struct lock, lock_elem);
+      if (max_lock->lock_priority != PRI_MIN - 1)
+      {
+        //Gotta set the priority of the max lock_priority now (similar to in lock acquire basically) 
+        if (curr->effective_priority < max_lock->lock_priority) {
+          curr->effective_priority = max_lock->lock_priority;
+          yield_on_pri_change();
+        }
+      }
+      else {
+          curr->effective_priority = curr->priority;
+          yield_on_pri_change(); //may need to move
+        }
+    }
+    
+  }
+  
+  intr_set_level (old_level);
 }
+// void
+// lock_release (struct lock *lock) 
+// {
+//   ASSERT (lock != NULL);
+//   ASSERT (lock_held_by_current_thread (lock));
+
+//   /* TODO: (holder is current thread)
+//      If holder's donated priority list not empty, remove highest
+//      priority from donated list -> update holder priority -> yield */
+//   //struct thread *cur = thread_current ();
+//   lock->holder = NULL;
+//   sema_up (&lock->semaphore);
+// }
 
 
 
