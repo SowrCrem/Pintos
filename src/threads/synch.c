@@ -244,7 +244,7 @@ lock_init (struct lock *lock)
   ASSERT (lock != NULL);
 
   lock->holder = NULL;
-  // lock->lock_priority = PRI_MIN - 1;
+  lock->lock_priority = PRI_MIN - 1;
   sema_init (&lock->semaphore, 1);
 }
 
@@ -256,54 +256,6 @@ lock_init (struct lock *lock)
    interrupt handler.  This function may be called with
    interrupts disabled, but interrupts will be turned back on if
    we need to sleep. */
-// void
-// lock_acquire (struct lock *lock)
-// {
-//   ASSERT (lock != NULL);
-//   ASSERT (!intr_context ());
-//   ASSERT (!lock_held_by_current_thread (lock));
-
-//   enum intr_level old_level = intr_disable ();
-
-//   struct thread *curr, *holder;
-//   struct lock *max_lock;
-
-
-//   curr = thread_current();
-
-//   if (!thread_mlfqs)
-//   {
-//     holder = lock->holder;
-//     curr->blocked_lock = max_lock = lock;
-
-//     while (holder != NULL &&
-//         holder->effective_priority < curr->effective_priority)
-//     {
-//       holder->donate_acquired = true;
-//       thread_set_priority_plus(holder, curr->priority, true);
-
-//       //Update the lock's priority if necessary 
-//       max_lock->lock_priority = MAX(max_lock->lock_priority, curr->effective_priority);
-//       if (holder->status == THREAD_BLOCKED && holder->blocked_lock != NULL)
-//       {
-//         max_lock = holder->blocked_lock;
-//         holder   = holder->blocked_lock->holder;
-//       }
-//       else 
-//         break;
-//       }
-//   curr->blocked_lock = NULL;
-
-//   }
-//   sema_down (&lock->semaphore);
-//   lock->holder = curr;
-
-//   if (!thread_mlfqs)
-//       list_push_back(&curr->lock_acquired, &lock->lock_elem);
-
-//   intr_set_level(old_level);
-
-// }
 void
 lock_acquire (struct lock *lock)
 {
@@ -335,7 +287,7 @@ lock_acquire (struct lock *lock)
       curr->effective_priority > holder->effective_priority)
     {
       holder->donate_acquired = true;
-      printf("current effective priority: %d\n ", curr->effective_priority);
+      // printf("current effective priority: %d\n ", curr->effective_priority);
       int pri = curr->effective_priority;
       thread_set_priority_plus(holder,pri , true);
       ready_list_sort();
@@ -384,8 +336,8 @@ lock_try_acquire (struct lock *lock)
   if (success)
   {
     lock->holder = thread_current ();
-    if (!thread_mlfqs)
-      list_push_back(&lock->holder->lock_acquired, &lock->lock_elem);
+    // if (!thread_mlfqs)
+    //   list_push_back(&lock->holder->lock_acquired, &lock->lock_elem);
   }
   return success;
 }
@@ -396,43 +348,6 @@ lock_try_acquire (struct lock *lock)
    An interrupt handler cannot acquire a lock, so it does not
    make sense to try to release a lock within an interrupt
    handler. */
-//void
-// lock_release (struct lock *lock) 
-// {
-//   ASSERT (lock != NULL);
-//   ASSERT (lock_held_by_current_thread (lock));
-//   struct lock *max_lock;
-//   enum intr_level old_level = intr_disable();
-//   struct thread *curr = thread_current ();
-
-//   lock->holder = NULL;
-//   sema_up (&lock->semaphore);  
-  
-//   //When a lock is release, we gotta do a few things 
-//   if (!thread_mlfqs)
-//   {
-//     list_remove(&lock->lock_elem);
-    
-//     lock->lock_priority = PRI_MIN - 1;
-
-//     if (!list_empty(&curr->lock_acquired))
-//     {
-//       max_lock = list_entry(list_max(&curr->lock_acquired, &lock_pri_cmp_func, NULL), struct lock, lock_elem);
-//       if (max_lock->lock_priority != PRI_MIN - 1)
-//       {
-//         thread_set_priority_plus(curr, max_lock->lock_priority, true);
-//       }
-//       else {
-//         curr->donate_acquired = false;
-//         thread_set_priority(curr->priority);
-//         }
-//     }
-    
-//     yield_on_pri_change(); //may need to move
-//   }
-  
-//   intr_set_level (old_level);
-// }
 void
 lock_release (struct lock *lock) 
 {
@@ -455,7 +370,7 @@ lock_release (struct lock *lock)
     list_remove(&lock->lock_elem);
     lock->lock_priority = PRI_MIN - 1;
 
-    if (!list_empty(&curr->lock_acquired)) 
+    if (!list_empty(&curr->lock_acquired) && (&curr->lock_acquired != NULL)) 
     {
       max_lock = list_entry(list_pop_front(&curr->lock_acquired), struct lock, lock_elem);
       //Reset lock priority with next lock

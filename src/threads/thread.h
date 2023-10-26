@@ -162,5 +162,6 @@ void yield_on_pri_change(void);
 bool priority_cmp_func (const struct list_elem *a, 
                   const struct list_elem *b, void *aux UNUSED);
 
+void ready_list_sort(void);
 
 #endif /* threads/thread.h */
