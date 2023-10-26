@@ -312,8 +312,7 @@ lock_acquire (struct lock *lock)
   ASSERT (!lock_held_by_current_thread (lock));
 
 
-  struct thread* holder;
-  struct lock* max_lock;
+  
 
   if (thread_mlfqs)
   {
@@ -322,20 +321,24 @@ lock_acquire (struct lock *lock)
   }
   else 
   {
+    struct thread* holder;
+    struct lock* max_lock;
+    struct thread *curr = thread_current ();
+
     enum intr_level old_level = intr_disable();
 
     holder = lock->holder;
     max_lock = lock;
-    thread_current ()->blocked_lock = lock;
+    curr->blocked_lock = lock;
 
     while (holder != NULL &&
       thread_current ()->effective_priority > holder->effective_priority)
     {
       holder->donate_acquired = true;
-      thread_set_priority_plus(holder, thread_current ()->effective_priority, true);
+      thread_set_priority_plus(holder, curr->effective_priority, true);
 
       //Update the lock's priority if necessary 
-      max_lock->lock_priority = MAX (max_lock->lock_priority, thread_current ()->effective_priority);
+      max_lock->lock_priority = MAX (max_lock->lock_priority, curr->effective_priority);
       if (holder->status == THREAD_BLOCKED && holder->blocked_lock != NULL)
       {
         max_lock = holder->blocked_lock;
@@ -346,12 +349,12 @@ lock_acquire (struct lock *lock)
     }
 
       sema_down (&lock->semaphore);
-      lock->holder = thread_current ();
+      lock->holder = curr;
 
       if (!thread_mlfqs)
       {
         thread_current ()->blocked_lock = NULL;
-        list_insert_ordered(&thread_current ()->lock_acquired, &lock->lock_elem, &lock_pri_cmp_func, NULL);
+        list_insert_ordered(&curr->lock_acquired, &lock->lock_elem, &lock_pri_cmp_func, NULL);
       }
       intr_set_level(old_level);
   }
@@ -433,11 +436,13 @@ lock_release (struct lock *lock)
   ASSERT (lock != NULL);
   ASSERT (lock_held_by_current_thread (lock));
 
-  struct lock *max_lock;
-  enum intr_level old_level; 
+
 
   if (!thread_mlfqs)
   {
+    struct lock *max_lock;
+    enum intr_level old_level; 
+    struct thread *curr = thread_current ();
     old_level = intr_disable();
 
 
@@ -447,16 +452,16 @@ lock_release (struct lock *lock)
     list_remove(&lock->lock_elem);
     lock->lock_priority = PRI_MIN - 1;
 
-    if (!list_empty(&thread_current ()->lock_acquired))
+    if (!list_empty(&curr->lock_acquired)) 
     {
-      max_lock = list_entry(list_pop_front(&thread_current ()->lock_acquired), struct lock, lock_elem);
+      max_lock = list_entry(list_pop_front(&curr->lock_acquired), struct lock, lock_elem);
       //Reset lock priority with next lock
       if (max_lock->lock_priority != PRI_MIN - 1)
         thread_set_priority_plus(thread_current (), max_lock->lock_priority, true);
       else {
         //No longer has any donations, acts normally
-        thread_current ()->donate_acquired = false;
-        thread_set_priority(thread_current ()->priority);
+        curr->donate_acquired = false;
+        thread_set_priority(curr->priority);
       }
     }
 
@@ -482,7 +487,7 @@ lock_pri_cmp_func (const struct list_elem *a,
   const struct lock *a_lock = list_entry(a, struct lock, lock_elem);
   const struct lock *b_lock = list_entry(b, struct lock, lock_elem);
 
-  return (a_lock->lock_priority < b_lock->lock_priority);
+  return (a_lock->lock_priority > b_lock->lock_priority);
 }
 
 

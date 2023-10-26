@@ -403,8 +403,8 @@ void thread_set_priority_plus(struct thread *t, int new_priority, bool donate)
 {
   ASSERT(!thread_mlfqs);
 
-  if (new_priority >= PRI_MIN && new_priority <= PRI_MAX)
-  {
+  // if (new_priority >= PRI_MIN && new_priority <= PRI_MAX)
+  // {
     t->priority = new_priority;
 
     if (!t->donate_acquired)
@@ -413,10 +413,10 @@ void thread_set_priority_plus(struct thread *t, int new_priority, bool donate)
     {
       if (new_priority > t->effective_priority)
         t->effective_priority = new_priority;
-      else 
-        t->effective_priority = new_priority;
+      else
+        t->effective_priority = t->priority;
     }
-    // else if (list_empty(&t->lock_acquired) || new_priority > t->effective_priority)
+    // else if (new_priority > t->effective_priority) doing this give page fault exception
     //   t->effective_priority = new_priority;
 
     /* Check if new_priority is less than priority of front of ready_list. */
@@ -426,9 +426,9 @@ void thread_set_priority_plus(struct thread *t, int new_priority, bool donate)
     if (t_front->effective_priority > t->effective_priority)
       thread_yield ();
     }
-  }
-  else 
-    thread_current()->priority = PRI_DEFAULT;
+  // }
+  // else 
+  //   thread_current()->priority = PRI_DEFAULT;
 }
 
 
