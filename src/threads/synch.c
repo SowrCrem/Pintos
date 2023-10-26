@@ -332,10 +332,13 @@ lock_acquire (struct lock *lock)
     curr->blocked_lock = lock;
 
     while (holder != NULL &&
-      thread_current ()->effective_priority > holder->effective_priority)
+      curr->effective_priority > holder->effective_priority)
     {
       holder->donate_acquired = true;
-      thread_set_priority_plus(holder, curr->effective_priority, true);
+      printf("current effective priority: %d\n ", curr->effective_priority);
+      int pri = curr->effective_priority;
+      thread_set_priority_plus(holder,pri , true);
+      ready_list_sort();
 
       //Update the lock's priority if necessary 
       max_lock->lock_priority = MAX (max_lock->lock_priority, curr->effective_priority);
@@ -353,7 +356,7 @@ lock_acquire (struct lock *lock)
 
       if (!thread_mlfqs)
       {
-        thread_current ()->blocked_lock = NULL;
+        curr->blocked_lock = NULL;
         list_insert_ordered(&curr->lock_acquired, &lock->lock_elem, &lock_pri_cmp_func, NULL);
       }
       intr_set_level(old_level);
@@ -456,8 +459,10 @@ lock_release (struct lock *lock)
     {
       max_lock = list_entry(list_pop_front(&curr->lock_acquired), struct lock, lock_elem);
       //Reset lock priority with next lock
-      if (max_lock->lock_priority != PRI_MIN - 1)
+      if (max_lock->lock_priority != PRI_MIN - 1) {
         thread_set_priority_plus(thread_current (), max_lock->lock_priority, true);
+        ready_list_sort();
+      }
       else {
         //No longer has any donations, acts normally
         curr->donate_acquired = false;

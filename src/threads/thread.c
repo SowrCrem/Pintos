@@ -213,6 +213,7 @@ thread_create (const char *name, int priority, thread_func *function,
 
   /* Initialize thread. */
   init_thread (t, name, priority);
+  printf("Priority is %d", t->priority);
   tid = t->tid = allocate_tid ();
 
   /* Prepare thread for first run by initializing its stack.
@@ -292,6 +293,7 @@ thread_unblock (struct thread *t)
     update_thread_priority(t, NULL);
   
   list_insert_ordered (&ready_list, &t->elem, *priority_cmp_func, NULL);
+  printf("thread name: %s added to ready list\n", t->name);
   t->status = THREAD_READY;
   intr_set_level (old_level);
 
@@ -405,10 +407,15 @@ void thread_set_priority_plus(struct thread *t, int new_priority, bool donate)
 
   // if (new_priority >= PRI_MIN && new_priority <= PRI_MAX)
   // {
-    t->priority = new_priority;
+    // t->priority = new_priority;
 
-    if (!t->donate_acquired)
-      t->effective_priority = t->priority = new_priority;
+    if (!t->donate_acquired) {
+      printf("t->effective_priority before is: %d\n", t->effective_priority);
+      printf("new priority is: %d\n", new_priority);
+      t->effective_priority = new_priority;
+      printf("t->effective_priority after is: %d\n", t->effective_priority);
+
+    }
     else if (!donate)
     {
       if (new_priority > t->effective_priority)
@@ -422,10 +429,15 @@ void thread_set_priority_plus(struct thread *t, int new_priority, bool donate)
     /* Check if new_priority is less than priority of front of ready_list. */
     if (!list_empty (&ready_list))
     {
+      printf("ready list size is: %d\n", list_size(&ready_list));
+      printf("ready list front is: %s\n", list_entry(list_front(&ready_list), struct thread, elem)->name);
     struct thread *t_front = list_entry (list_front (&ready_list), struct thread, elem);
+        printf("t effective priority is %d\n", t->effective_priority);
+    printf("t_front effective priority is %d\n", t_front->effective_priority);
     if (t_front->effective_priority > t->effective_priority)
       thread_yield ();
     }
+
   // }
   // else 
   //   thread_current()->priority = PRI_DEFAULT;
@@ -438,6 +450,7 @@ thread_set_priority (int new_priority)
   if (!thread_mlfqs) 
   {
     thread_set_priority_plus(thread_current(), new_priority, false);
+    ready_list_sort();
   }
   else 
     thread_current ()->priority = new_priority;
@@ -447,6 +460,7 @@ thread_set_priority (int new_priority)
 int
 thread_get_priority (void) 
 {
+  printf("thread_current() ->prio, effective: %d %d\n", thread_current ()->priority, thread_current ()->effective_priority);
   if (thread_mlfqs)
     return thread_current()->priority;
   else 
@@ -809,5 +823,12 @@ priority_cmp_func(const struct list_elem *a, const struct list_elem *b,
     return (a_thread->priority > b_thread->priority);
   else
     return (a_thread->effective_priority > b_thread->effective_priority);
+}
+
+
+void 
+ready_list_sort()
+{
+  list_sort(&ready_list, &priority_cmp_func, NULL);
 }
 
