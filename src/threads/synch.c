@@ -73,7 +73,7 @@ sema_down (struct semaphore *sema)
   while (sema->value == 0) 
     {
       if (thread_mlfqs)
-        list_push_front(&sema->waiters, &thread_current ()->elem);
+        list_push_back(&sema->waiters, &thread_current ()->elem);
       else
         list_insert_ordered (&sema->waiters, &thread_current ()->elem, *priority_cmp_func, NULL);
       thread_block ();
@@ -271,7 +271,6 @@ lock_init (struct lock *lock)
 
 //   curr = thread_current();
 
-
 //   if (!thread_mlfqs)
 //   {
 //     holder = lock->holder;
@@ -280,12 +279,11 @@ lock_init (struct lock *lock)
 //     while (holder != NULL &&
 //         holder->effective_priority < curr->effective_priority)
 //     {
-//       holder->effective_priority = curr->effective_priority;
-//       yield_on_pri_change();
+//       holder->donate_acquired = true;
+//       thread_set_priority_plus(holder, curr->priority, true);
 
 //       //Update the lock's priority if necessary 
 //       max_lock->lock_priority = MAX(max_lock->lock_priority, curr->effective_priority);
-
 //       if (holder->status == THREAD_BLOCKED && holder->blocked_lock != NULL)
 //       {
 //         max_lock = holder->blocked_lock;
@@ -293,20 +291,15 @@ lock_init (struct lock *lock)
 //       }
 //       else 
 //         break;
-
 //       }
-//     sema_down (&lock->semaphore);
-//     lock->holder = curr;
-//     curr->blocked_lock = NULL;
-//     if (!thread_mlfqs)
+//   curr->blocked_lock = NULL;
+
+//   }
+//   sema_down (&lock->semaphore);
+//   lock->holder = curr;
+
+//   if (!thread_mlfqs)
 //       list_push_back(&curr->lock_acquired, &lock->lock_elem);
-//   }
-//   //If mlfqs
-//   else 
-//   {
-//     sema_down (&lock->semaphore);
-//     lock->holder = curr;
-//   }
 
 //   intr_set_level(old_level);
 
@@ -318,11 +311,51 @@ lock_acquire (struct lock *lock)
   ASSERT (!intr_context ());
   ASSERT (!lock_held_by_current_thread (lock));
 
-  /* TODO:
-     If holder.priority less than cur.priority, then donate 
-     cur.priority to holder -> update holder priority -> yield */
-  sema_down (&lock->semaphore);
-  lock->holder = thread_current ();
+
+  struct thread* holder;
+  struct lock* max_lock;
+
+  if (thread_mlfqs)
+  {
+    sema_down (&lock->semaphore);
+    lock->holder = thread_current ();
+  }
+  else 
+  {
+    enum intr_level old_level = intr_disable();
+
+    holder = lock->holder;
+    max_lock = lock;
+    thread_current ()->blocked_lock = lock;
+
+    while (holder != NULL &&
+      thread_current ()->effective_priority > holder->effective_priority)
+    {
+      holder->donate_acquired = true;
+      thread_set_priority_plus(holder, thread_current ()->effective_priority, true);
+
+      //Update the lock's priority if necessary 
+      max_lock->lock_priority = MAX (max_lock->lock_priority, thread_current ()->effective_priority);
+      if (holder->status == THREAD_BLOCKED && holder->blocked_lock != NULL)
+      {
+        max_lock = holder->blocked_lock;
+        holder   = holder->blocked_lock->holder;
+      }
+      else
+        break;
+    }
+
+      sema_down (&lock->semaphore);
+      lock->holder = thread_current ();
+
+      if (!thread_mlfqs)
+      {
+        thread_current ()->blocked_lock = NULL;
+        list_insert_ordered(&thread_current ()->lock_acquired, &lock->lock_elem, &lock_pri_cmp_func, NULL);
+      }
+      intr_set_level(old_level);
+  }
+
 }
 
 
@@ -357,7 +390,7 @@ lock_try_acquire (struct lock *lock)
    An interrupt handler cannot acquire a lock, so it does not
    make sense to try to release a lock within an interrupt
    handler. */
-// void
+//void
 // lock_release (struct lock *lock) 
 // {
 //   ASSERT (lock != NULL);
@@ -374,26 +407,18 @@ lock_try_acquire (struct lock *lock)
 //   {
 //     list_remove(&lock->lock_elem);
     
-//     if (!list_empty(&lock->semaphore.waiters)) {
-//       lock->lock_priority = list_entry(list_front(&lock->semaphore.waiters), struct thread, elem)->effective_priority;
-//     }
-//     else {
-//       lock->lock_priority = PRI_MIN -1;
-//     }
+//     lock->lock_priority = PRI_MIN - 1;
 
 //     if (!list_empty(&curr->lock_acquired))
 //     {
 //       max_lock = list_entry(list_max(&curr->lock_acquired, &lock_pri_cmp_func, NULL), struct lock, lock_elem);
 //       if (max_lock->lock_priority != PRI_MIN - 1)
 //       {
-//         //Gotta set the priority of the max lock_priority now (similar to in lock acquire basically) 
-//         if (curr->effective_priority < max_lock->lock_priority) {
-//           curr->effective_priority = max_lock->lock_priority;
-//           yield_on_pri_change();
-//         }
+//         thread_set_priority_plus(curr, max_lock->lock_priority, true);
 //       }
 //       else {
-//           curr->effective_priority = curr->priority;
+//         curr->donate_acquired = false;
+//         thread_set_priority(curr->priority);
 //         }
 //     }
     
@@ -408,12 +433,42 @@ lock_release (struct lock *lock)
   ASSERT (lock != NULL);
   ASSERT (lock_held_by_current_thread (lock));
 
-  /* TODO: (holder is current thread)
-     If holder's donated priority list not empty, remove highest
-     priority from donated list -> update holder priority -> yield */
-  //struct thread *cur = thread_current ();
-  lock->holder = NULL;
-  sema_up (&lock->semaphore);
+  struct lock *max_lock;
+  enum intr_level old_level; 
+
+  if (!thread_mlfqs)
+  {
+    old_level = intr_disable();
+
+
+    lock->holder = NULL;
+    sema_up (&lock->semaphore);
+
+    list_remove(&lock->lock_elem);
+    lock->lock_priority = PRI_MIN - 1;
+
+    if (!list_empty(&thread_current ()->lock_acquired))
+    {
+      max_lock = list_entry(list_pop_front(&thread_current ()->lock_acquired), struct lock, lock_elem);
+      //Reset lock priority with next lock
+      if (max_lock->lock_priority != PRI_MIN - 1)
+        thread_set_priority_plus(thread_current (), max_lock->lock_priority, true);
+      else {
+        //No longer has any donations, acts normally
+        thread_current ()->donate_acquired = false;
+        thread_set_priority(thread_current ()->priority);
+      }
+    }
+
+    intr_set_level (old_level);
+  }
+  else 
+  {
+    lock->holder = NULL;
+    sema_up (&lock->semaphore);
+  }
+
+  
 }
 
 

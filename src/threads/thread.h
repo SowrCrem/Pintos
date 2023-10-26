@@ -98,6 +98,7 @@ struct thread
     int nice;                           /* Niceness for MLFQ scheduling */
     struct list lock_acquired;
     struct lock *blocked_lock;
+    bool donate_acquired;
 
 
 
@@ -148,6 +149,7 @@ void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
+void thread_set_priority_plus(struct thread *t, int new_priority, bool donate);
 
 /* BSD Calculations */
 void update_bsd_variables(void);

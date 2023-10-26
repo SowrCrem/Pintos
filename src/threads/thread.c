@@ -399,32 +399,45 @@ thread_foreach (thread_action_func *func, void *aux)
 }
 
 /* Sets the current thread's priority to NEW_PRIORITY. */
+void thread_set_priority_plus(struct thread *t, int new_priority, bool donate)
+{
+  ASSERT(!thread_mlfqs);
+
+  if (new_priority >= PRI_MIN && new_priority <= PRI_MAX)
+  {
+    t->priority = new_priority;
+
+    if (!t->donate_acquired)
+      t->effective_priority = t->priority = new_priority;
+    else if (!donate)
+    {
+      if (new_priority > t->effective_priority)
+        t->effective_priority = new_priority;
+      else 
+        t->effective_priority = new_priority;
+    }
+    // else if (list_empty(&t->lock_acquired) || new_priority > t->effective_priority)
+    //   t->effective_priority = new_priority;
+
+    /* Check if new_priority is less than priority of front of ready_list. */
+    if (!list_empty (&ready_list))
+    {
+    struct thread *t_front = list_entry (list_front (&ready_list), struct thread, elem);
+    if (t_front->effective_priority > t->effective_priority)
+      thread_yield ();
+    }
+  }
+  else 
+    thread_current()->priority = PRI_DEFAULT;
+}
+
+
 void
 thread_set_priority (int new_priority) 
 {
   if (!thread_mlfqs) 
   {
-    struct thread *cur = thread_current ();
-    if (new_priority >= PRI_MIN && new_priority <= PRI_MAX) 
-    {
-      cur->priority = new_priority;
-
-      if (list_empty(&cur->lock_acquired))
-        cur->effective_priority = new_priority;
-      else if (new_priority > cur->effective_priority)
-        cur->effective_priority = new_priority;
-
-      /* Check if new_priority is less than priority of front of ready_list. */
-      if (!list_empty (&ready_list))
-      {
-        struct thread *t_front = list_entry (list_front (&ready_list), struct thread, elem);
-        
-        if (t_front->effective_priority > cur->effective_priority) {
-          thread_yield ();
-        }
-      }
-    } else 
-        thread_current ()->priority = PRI_DEFAULT;
+    thread_set_priority_plus(thread_current(), new_priority, false);
   }
   else 
     thread_current ()->priority = new_priority;
@@ -585,6 +598,7 @@ init_thread (struct thread *t, const char *name, int priority)
   }
   else {
     t->blocked_lock = NULL;
+    t->donate_acquired = false;
     list_init(&t->lock_acquired);
   }
 
