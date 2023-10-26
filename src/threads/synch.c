@@ -197,11 +197,21 @@ lock_acquire (struct lock *lock)
   ASSERT (!intr_context ());
   ASSERT (!lock_held_by_current_thread (lock));
 
-  /* TODO:
-     If holder.priority less than cur.priority, then donate 
-     cur.priority to holder -> update holder priority -> yield */
-  sema_down (&lock->semaphore);
-  lock->holder = thread_current ();
+  struct thread *cur = thread_current ();
+
+  if (lock->holder != NULL && strcmp(cur->name, "idle") != 0 &&
+      lock->holder->effective_priority < cur->effective_priority)  
+  {
+    donate_priority (lock->holder);
+    /* After priority donation, holder's effective priority gets
+      boosted. Current thread will be blocked in sema_down. 
+      Holder thread should be scheduled next as it will have the
+      same priority as the donee, and round robin scheduling is used. */
+    yield_if_not_highest ();
+  }
+
+  sema_down (&lock->semaphore); 
+  lock->holder = cur;
 }
 
 /* Tries to acquires LOCK and returns true if successful or false
@@ -235,11 +245,19 @@ lock_release (struct lock *lock)
   ASSERT (lock != NULL);
   ASSERT (lock_held_by_current_thread (lock));
 
-  /* TODO: (holder is current thread)
-     If holder's donated priority list not empty, remove highest
-     priority from donated list -> update holder priority -> yield */
+  /* If within an interrupt handler or if current thread is not
+     holder, then return. */
+  if (intr_context ())
+  {
+    return;
+  }
+
   lock->holder = NULL;
   sema_up (&lock->semaphore);
+  priority_down ();
+
+  yield_if_not_highest();
+  
 }
 
 /* Returns true if the current thread holds LOCK, false

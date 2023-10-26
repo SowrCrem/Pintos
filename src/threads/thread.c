@@ -85,7 +85,7 @@ static tid_t allocate_tid (void);
    
    HH SS */
 bool
-cmp_thread_priority(const struct list_elem *a, const struct list_elem *b, 
+cmp_thread_priority (const struct list_elem *a, const struct list_elem *b, 
              void *aux UNUSED)
 {
   const struct thread *t_a = list_entry(a, struct thread, elem);
@@ -94,16 +94,99 @@ cmp_thread_priority(const struct list_elem *a, const struct list_elem *b,
   return t_a->effective_priority > t_b->effective_priority;
 }
 
+bool
+cmp_donee_priority (const struct list_elem *a, const struct list_elem *b, 
+             void *aux UNUSED)
+{
+  const struct thread *t_a = list_entry(a, struct thread, donee);
+  const struct thread *t_b = list_entry(b, struct thread, donee);
+
+  return t_a->effective_priority > t_b->effective_priority;
+}
+
 /* TODO: Add current thread's (highest) priority to OTHER thread's
    donated priorities list. Then update OTHER thread's effective
-   priority. Then yield current thread.
+   priority.
    
    HH SS */
 void
 donate_priority (struct thread *other)
-{
+{ 
+  struct thread *cur = thread_current ();
 
+  enum intr_level old_level;
+  old_level = intr_disable ();
+  /* Donate current thread's priority to OTHER thread. */
+  list_push_front (&other->donor_threads, &cur->donee);
+  // /* Sort donated priorities list. */
+  // list_sort (&cur->donor_threads, *cmp_thread_priority, NULL);
+  intr_set_level (old_level);
+
+  update_priority (other);
 }
+
+/* Update thread THREAD's effective priority, even if it is blocked
+   or sleeping. Thread must have donated priorities to update its
+   effective priority.
+   
+   HH SS */
+void
+update_priority (struct thread *thread) 
+{
+  /* If thread still has donations, update priority else set 
+     effective priority to base priority. */
+  if (list_empty (&thread->donor_threads)) {
+    /* Set THREAD's effective priority to base priority. */
+    thread->effective_priority = thread->priority;
+  } else if (thread->priority > thread->effective_priority)
+  {
+    thread->effective_priority = thread->priority;
+  } else 
+  {
+    enum intr_level old_level;
+    old_level = intr_disable ();
+    thread->effective_priority = 
+                    list_entry (list_max (&thread->donor_threads, 
+                                          *cmp_donee_priority, NULL), 
+                                struct thread, donee)->effective_priority;
+    intr_set_level (old_level);
+  }
+}
+
+/* Remove highest donated priority for current thread and update
+   effective priority accordingly. 
+   
+   HH SS */
+void
+priority_down (void)
+{
+  struct thread *cur = thread_current ();
+
+  // ASSERT (!list_empty (&cur->donor_threads));
+  
+  if (!list_empty (&cur->donor_threads)) {
+    enum intr_level old_level;
+    old_level = intr_disable ();
+    list_remove (list_max (&cur->donor_threads, *cmp_donee_priority, NULL));
+    // list_sort (&cur->donor_threads, *cmp_donee_priority, NULL);
+    // list_pop_front (&cur->donor_threads);
+    intr_set_level (old_level);
+  }
+  update_priority (cur);
+}
+
+void
+yield_if_not_highest (void)
+{
+  if (!list_empty (&ready_list)) {
+    struct thread* cur = thread_current ();
+    struct thread* ready_front = list_front (&ready_list);
+
+    if (ready_front->effective_priority >= cur->effective_priority) {
+      thread_yield ();
+    }
+  }
+} 
 
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
@@ -306,7 +389,7 @@ thread_unblock (struct thread *t)
      thread and unblocked thread is not the idle thread. */
   struct thread *cur = thread_current ();
   if (t->effective_priority > cur->effective_priority && 
-      strcmp (cur->name, "idle") != 0)
+      cur != idle_thread)
   {
     thread_yield ();
   }
@@ -410,12 +493,13 @@ thread_set_priority (int new_priority)
   {
     cur->priority = new_priority;
 
-    /* Don't update effective priority if priority donations
-       are present AND new_priority < effective priority. */
-    if (list_empty (&cur->donated_priorities))
-      cur->effective_priority = new_priority;
-    else if (new_priority > cur->effective_priority)
-      cur->effective_priority = new_priority;
+    /* Update effective priority if priority donations are
+       not present OR new_priority > effective priority. */
+    // if (list_empty (&cur->donor_threads))
+    //   cur->effective_priority = cur->priority;
+    // else if (new_priority > cur->effective_priority)
+    //   cur->effective_priority = new_priority;
+    update_priority (cur);
 
     /* Check if new_priority is less than priority of
        front of ready_list. */
@@ -430,7 +514,7 @@ thread_set_priority (int new_priority)
   } else    // If invalid priority - set to default priority
   {
     printf("Invalid priority\n");
-    thread_current ()->priority = PRI_DEFAULT;
+    thread_current ()->priority = PRI_MIN - 1;
   }
 }
 
@@ -562,8 +646,9 @@ init_thread (struct thread *t, const char *name, int priority)
   t->effective_priority = priority;
   t->magic = THREAD_MAGIC;
 
-  /* Initialize the donated priorities list. */
-  list_init(&t->donated_priorities);
+  /* Initialize the donated priorities list and respective lock. */
+  list_init (&t->donor_threads);
+  // lock_init (&t->priority_list_lock);
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);

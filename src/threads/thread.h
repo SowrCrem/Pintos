@@ -4,6 +4,7 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
+#include "synch.h"
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -89,7 +90,9 @@ struct thread
     uint8_t *stack;                     /* Saved stack pointer. */
     int priority;                       /* Priority. */
     int effective_priority;             /* Effective priority. */
-    struct list donated_priorities;     /* List of donated priorities to thread. */
+    bool donated;                       /* Boolean if thread donated. */
+    struct list donor_threads;     /* List of donated priorities to thread. */
+    struct list_elem donee;             /* List element for donations. */
     struct list_elem allelem;           /* List element for all threads list. */
 
     /* Shared between thread.c and synch.c. */
@@ -113,7 +116,9 @@ extern bool thread_mlfqs;
 /* Added functions - HH SS */
 bool cmp_thread_priority (const struct list_elem *a, const struct list_elem *b, 
                           void *aux UNUSED);
-
+void donate_priority (struct thread *other);
+void priority_down (void);
+void yield_if_not_highest (void);
 
 void thread_init (void);
 void thread_start (void);
