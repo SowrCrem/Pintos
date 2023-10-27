@@ -32,7 +32,7 @@ struct lock
     struct semaphore semaphore; /* Binary semaphore controlling access. */
     
     struct list_elem elem;      /* List element - thread's list of locks */
-    int lock_priority;          /* Lock Priority */
+    int priority;          /* Lock Priority */
   };
 
 void lock_init (struct lock *);

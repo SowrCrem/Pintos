@@ -722,7 +722,7 @@ update_bsd_variables(void)
   
   /* Updates Priority every Time Slice */
   if ((timer_ticks ()  % TIME_SLICE) == 0) {
-    thread_foreach (&update_bsd_priority, NULL);
+    update_bsd_priority(thread_current (), NULL);
     list_sort (&ready_list, &priority_less_func, NULL);
   }
 }

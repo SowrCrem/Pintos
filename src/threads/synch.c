@@ -196,7 +196,7 @@ lock_init (struct lock *lock)
   ASSERT (lock != NULL);
 
   lock->holder = NULL;
-  lock->lock_priority = PRI_MIN;
+  lock->priority = PRI_MIN;
   sema_init (&lock->semaphore, 1);
 }
 
@@ -230,7 +230,7 @@ lock_acquire (struct lock *lock)
     {
       holder->donate_acquired = true;
       thread_set_priority_plus (holder, curr->priority, true);
-      max_lock->lock_priority = MAX (max_lock->lock_priority, curr->priority);
+      max_lock->priority = MAX (max_lock->priority, curr->priority);
 
       if (holder->wait_lock != NULL)
       {
@@ -296,7 +296,7 @@ lock_release (struct lock *lock)
   if (!thread_mlfqs)
   {
     list_remove(&lock->elem);
-    lock->lock_priority = PRI_MIN;
+    lock->priority = PRI_MIN;
 
     if (list_empty(&curr->list_locks))
     {
@@ -307,8 +307,8 @@ lock_release (struct lock *lock)
     {
       max_lock = list_entry(list_max(&curr->list_locks, 
                             &lock_less_func, NULL), struct lock, elem);
-      if (max_lock->lock_priority != PRI_MIN)
-        thread_set_priority_plus(curr, max_lock->lock_priority, true);
+      if (max_lock->priority != PRI_MIN)
+        thread_set_priority_plus(curr, max_lock->priority, true);
       else 
         thread_set_priority(curr->base_priority);
     }
@@ -435,5 +435,5 @@ lock_less_func (const struct list_elem *a, const struct list_elem *b,
 	const struct lock *l_a = list_entry (a, struct lock, elem);
 	const struct lock *l_b = list_entry (b, struct lock, elem);
 
-	return l_a->lock_priority < l_b->lock_priority;
+	return l_a->priority < l_b->priority;
 }
