@@ -89,9 +89,17 @@ struct thread
     uint8_t *stack;                     /* Saved stack pointer. */
     int priority;                       /* Priority. */
     struct list_elem allelem;           /* List element for all threads list. */
-
-    /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
+
+         /* Strictly Priority Scheduling & Donation  */
+    int base_priority;                  /* Base Priority (Original Priority)*/
+    struct lock *wait_lock;             /* Lock that thread is acquiring, but taken */
+    struct list list_locks;             /* List of locks thread holds */
+    bool donate_acquired;               /* Has acquired one or more donations */
+
+            /* Strictly Advanced Scheduling (BSD) */
+    int32_t recent_cpu;                 /* BSD Scheduling - recent_cpu value */
+    int32_t nice;                       /* BSD Scheduling - nice value */
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
@@ -138,5 +146,19 @@ int thread_get_nice (void);
 void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
+
+/* Priority Scheduling & Donation Functions */
+bool priority_less_func(const struct list_elem *a, const struct list_elem *b, void *aux);
+void yield_pri_change(void);
+void thread_set_priority_plus (struct thread *t, int new_priority, bool donate);
+
+
+/* Advanced Scheduling Functions */
+void update_bsd_variables(void);
+void update_bsd_priority (struct thread *t, void *aux);
+void update_recent_cpu (struct thread *t, void *aux);
+void update_load_avg(void);
+
+
 
 #endif /* threads/thread.h */
