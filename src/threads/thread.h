@@ -152,13 +152,10 @@ bool priority_less_func (const struct list_elem *a, const struct list_elem *b, v
 void yield_pri_change (void);
 void thread_set_priority_plus (struct thread *t, int new_priority, bool donate);
 
-
 /* Advanced scheduler functions */
 void update_bsd_variables (void);
 void update_bsd_priority (struct thread *t, void *aux);
 void update_recent_cpu (struct thread *t, void *aux);
 void update_load_avg (void);
-
-
 
 #endif /* threads/thread.h */

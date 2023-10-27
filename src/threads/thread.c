@@ -366,7 +366,7 @@ thread_exit (void)
      and schedule another process.  That process will destroy us
      when it calls thread_schedule_tail(). */
   intr_disable ();
-  list_remove (&thread_current()->allelem);
+  list_remove (&thread_current ()->allelem);
   thread_current ()->status = THREAD_DYING;
   schedule ();
   NOT_REACHED ();
@@ -383,7 +383,7 @@ thread_yield (void)
   ASSERT (!intr_context ());
 
   if (thread_mlfqs)
-    update_bsd_priority(cur, NULL);
+    update_bsd_priority (cur, NULL);
 
   old_level = intr_disable ();
   if (cur != idle_thread) 
@@ -418,14 +418,17 @@ thread_set_priority (int new_priority)
 }
 
 void 
-thread_set_priority_plus (struct thread *t, int new_priority, bool lock_func)
+thread_set_priority_plus (struct thread *t, int new_priority, bool is_lock_func)
 {
   if (thread_mlfqs)
     thread_current ()->priority = new_priority;
   else {
+
+    int initial_priority = t->priority;
+
       if (!t->donate_acquired)
       t->priority =  t->base_priority = new_priority;
-    else if (!lock_func)
+    else if (!is_lock_func)
       {
         if (t->priority > new_priority)
           t->base_priority = new_priority;
@@ -435,9 +438,42 @@ thread_set_priority_plus (struct thread *t, int new_priority, bool lock_func)
     else 
       t->priority = new_priority;
 
-    yield_pri_change ();
+    
+    if (new_priority < initial_priority) 
+    {
+      /* Check thread's list of locks and their priorities are not less
+         than current thread's priority. */
+      if (!list_empty (&t->list_locks) && !is_lock_func)
+      {
+        struct list_elem *e;
+        for (e = list_begin (&t->list_locks); e != list_end (&t->list_locks);
+            e = list_next (e))
+        {
+          /* Update held locks to new priority */
+          struct lock *l = list_entry (e, struct lock, elem);
 
-}
+          int max_priority = new_priority;
+          struct thread *max_waiter = list_entry (list_max (&l->semaphore.waiters,
+              priority_less_func, NULL), struct thread, elem);
+          if (max_waiter->priority >= new_priority)
+            max_priority = max_waiter->priority;
+
+          /* Update lock's priority. */
+          l->priority = max_priority;
+        }
+
+        /* Update thread effective priority to highest lock priority. */
+        t->priority = list_entry (list_max (&t->list_locks, lock_less_func, NULL),
+                                  struct lock, elem)->priority;
+      }
+      else
+      {
+        t->priority = new_priority;
+      }
+    }
+
+    yield_pri_change ();
+  }
 }
 /* Returns the current thread's priority. */
 int
@@ -449,11 +485,11 @@ thread_get_priority (void)
 /* Returns the current thread's nice value. */
 void
 thread_set_nice (int new_nice) 
-{
-  ASSERT(thread_mlfqs);
-  thread_current()->nice = new_nice;
+{ 
+  ASSERT (thread_mlfqs);
+  thread_current ()->nice = new_nice;
 
-  update_bsd_priority(thread_current(), NULL);
+  update_bsd_priority (thread_current (), NULL);
 
   yield_pri_change ();
 }
@@ -463,7 +499,7 @@ int
 thread_get_nice (void) 
 {
   ASSERT (thread_mlfqs);
-  return thread_current()->nice;
+  return thread_current ()->nice;
 }
 
 /* Returns 100 times the system load average. */
@@ -471,7 +507,7 @@ int
 thread_get_load_avg (void) 
 {
   ASSERT (thread_mlfqs);
-  return FIXED_TO_INT_TO_NEAREST(FIXED_MUL_INT(LOAD_AVG, 100));
+  return FIXED_TO_INT_TO_NEAREST (FIXED_MUL_INT (LOAD_AVG, 100));
 }
 
 
@@ -480,7 +516,8 @@ int
 thread_get_recent_cpu (void) 
 {
   ASSERT (thread_mlfqs);
-  return FIXED_TO_INT_TO_NEAREST(FIXED_MUL_INT(thread_current()->recent_cpu, 100));
+  return FIXED_TO_INT_TO_NEAREST (FIXED_MUL_INT 
+                                  (thread_current ()->recent_cpu, 100));
 }
 
 
@@ -578,7 +615,6 @@ init_thread (struct thread *t, const char *name, int priority)
   else
   {
     t->donate_acquired = false;
-
     list_init (&t->list_locks);
   }
 
@@ -703,15 +739,15 @@ allocate_tid (void)
 
 /* Updates all bsd variables */
 void 
-update_bsd_variables(void)
+update_bsd_variables (void)
 {
-  ASSERT(thread_mlfqs);
+  ASSERT (thread_mlfqs);
 
-  struct thread *t = thread_current();
+  struct thread *t = thread_current ();
 
   /* Increment Recent CPU every tick */
   if (thread_current () != idle_thread) 
-    t->recent_cpu = FIXED_ADD_INT(t->recent_cpu, 1);
+    t->recent_cpu = FIXED_ADD_INT (t->recent_cpu, 1);
 
   /*Update Load Avg and Recent_CPU every second*/
   if ((timer_ticks () % TIMER_FREQ) == 0 ) 
@@ -721,8 +757,8 @@ update_bsd_variables(void)
   }
   
   /* Updates Priority every Time Slice */
-  if ((timer_ticks ()  % TIME_SLICE) == 0) {
-    update_bsd_priority(thread_current (), NULL);
+  if ((timer_ticks () % TIME_SLICE) == 0) {
+    update_bsd_priority (thread_current (), NULL);
     list_sort (&ready_list, &priority_less_func, NULL);
   }
 }
