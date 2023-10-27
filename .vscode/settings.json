@@ -1,0 +1,7 @@
+{
+    "files.associations": {
+        "timer.h": "c",
+        "__threading_support": "c",
+        "interrupt.h": "c"
+    }
+}
