@@ -424,7 +424,7 @@ sema_less_func (const struct list_elem *a, const struct list_elem *b,
 	const struct semaphore_elem *s_a = list_entry (a, struct semaphore_elem, elem);
 	const struct semaphore_elem *s_b = list_entry (b, struct semaphore_elem, elem);
 
-	return s_a->priority < s_b->priority;
+	return s_a->priority > s_b->priority;
 }
 
 /* Lock Priority Comparison Function */

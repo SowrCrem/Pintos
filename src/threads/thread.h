@@ -87,19 +87,19 @@ struct thread
     enum thread_status status;          /* Thread state. */
     char name[16];                      /* Name (for debugging purposes). */
     uint8_t *stack;                     /* Saved stack pointer. */
-    int priority;                       /* Priority. */
+    int priority;                       /* Effective priority. */
     struct list_elem allelem;           /* List element for all threads list. */
     struct list_elem elem;              /* List element. */
 
-         /* Strictly Priority Scheduling & Donation  */
-    int base_priority;                  /* Base Priority (Original Priority)*/
-    struct lock *wait_lock;             /* Lock that thread is acquiring, but taken */
-    struct list list_locks;             /* List of locks thread holds */
-    bool donate_acquired;               /* Has acquired one or more donations */
+    /* For priority scheduling and donation.  */
+    int base_priority;                  /* Base priority of thread. */
+    struct lock *wait_lock;             /* Waiting lock for thread. */
+    struct list list_locks;             /* List of locks held by thread. */
+    bool donate_acquired;               /* If current thread has donated priority. */ 
 
-            /* Strictly Advanced Scheduling (BSD) */
-    int32_t recent_cpu;                 /* BSD Scheduling - recent_cpu value */
-    int32_t nice;                       /* BSD Scheduling - nice value */
+    /* For advanced scheduler (BSD) */
+    int32_t recent_cpu;                 /* Recent CPU value. */
+    int32_t nice;                       /* Niceness value. */
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
@@ -147,17 +147,17 @@ void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
-/* Priority Scheduling & Donation Functions */
-bool priority_less_func(const struct list_elem *a, const struct list_elem *b, void *aux);
-void yield_pri_change(void);
+/* Priority scheduler and donation functions. */
+bool priority_less_func (const struct list_elem *a, const struct list_elem *b, void *aux);
+void yield_pri_change (void);
 void thread_set_priority_plus (struct thread *t, int new_priority, bool donate);
 
 
-/* Advanced Scheduling Functions */
-void update_bsd_variables(void);
+/* Advanced scheduler functions */
+void update_bsd_variables (void);
 void update_bsd_priority (struct thread *t, void *aux);
 void update_recent_cpu (struct thread *t, void *aux);
-void update_load_avg(void);
+void update_load_avg (void);
 
 
 
