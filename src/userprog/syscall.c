@@ -15,6 +15,16 @@ syscall_init (void)
 static void
 syscall_handler (struct intr_frame *f UNUSED) 
 {
-  printf ("system call!\n");
+	/* Verification of User Provided Pointers, and Dereferences */
+	/* TODO: Change to Method 2 */
+	if (is_user_vaddr(f))
+	{
+		if (pagedir_get_page(thread_current ()->pagedir, f->frame_pointer) != NULL)
+		{
+			f->frame_pointer = * (void *)f->frame_pointer;
+		}
+	}
+
+	printf ("system call!\n");
   thread_exit ();
 }

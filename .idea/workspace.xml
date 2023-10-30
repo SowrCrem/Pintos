@@ -10,7 +10,8 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="0b6cf4aa-ffbb-4924-a81c-bcc902dc8190" name="Changes" comment="">
-      <change beforePath="$PROJECT_DIR$/src/userprog/process.c" beforeDir="false" afterPath="$PROJECT_DIR$/src/userprog/process.c" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/userprog/syscall.c" beforeDir="false" afterPath="$PROJECT_DIR$/src/userprog/syscall.c" afterDir="false" />
     </list>
     <list id="c78a819b-d91d-45ab-a06d-e2943bfd9d99" name="Changes by shivangi" comment="" />
     <option name="SHOW_DIALOG" value="false" />
@@ -59,6 +60,7 @@
     "node.js.detected.package.tslint": "true",
     "node.js.selected.package.eslint": "(autodetect)",
     "node.js.selected.package.tslint": "(autodetect)",
+    "nodejs_package_manager_path": "npm",
     "settings.editor.selected.configurable": "reference.settingsdialog.project.make",
     "vue.rearranger.settings.migration": "true"
   }
@@ -71,7 +73,7 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1697192274537</updated>
-      <workItem from="1698697513617" duration="671000" />
+      <workItem from="1698697513617" duration="922000" />
     </task>
     <servers />
   </component>
