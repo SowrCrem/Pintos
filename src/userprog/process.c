@@ -15,7 +15,7 @@
 #include "threads/init.h"
 #include "threads/interrupt.h"
 #include "threads/palloc.h"
-#include "threads/thread.h"
+#include "../threads/thread.h"
 #include "threads/vaddr.h"
 
 static thread_func start_process NO_RETURN;
