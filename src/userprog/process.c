@@ -64,8 +64,14 @@ process_execute (const char *file_name)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
 
-  /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
+  /* argv will store the parsed arguments, and argc keeps track of the number of arguments */
+  char *argv[MAX_ARGS];
+  int argc = 0;
+
+  parse_arguments(file_name, argv, &argc);
+
+  /* Create a new thread to execute FILE_NAME. This is the first item in argv */
+  tid = thread_create (argv[0], PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
   return tid;
