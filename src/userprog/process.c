@@ -18,8 +18,34 @@
 #include "../threads/thread.h"
 #include "threads/vaddr.h"
 
+#define MAX_ARGS 32
+
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
+
+/* Function to divide command line into words at spaces */
+void parse_arguments(const char *command_line, char *argv[], int *argc) 
+{
+  char *token;
+  char *save_ptr;
+
+  *argc = 0; /* Inititialise argument count */
+
+  /* Use strtok_r to split the command line into words */
+  for (token = strtok_r((char *)command_line, " ", &save_ptr); token != NULL; token = strtok_r(NULL, " ", &save_ptr)) 
+  {
+    if (*argc < MAX_ARGS)
+     {
+      argv[(*argc)++] = token;
+     } else 
+      {
+        /* To many arguments */
+        break;
+      }
+  }
+  argv[*argc] = NULL; /* Set the last argument to NULL */
+
+}
 
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)

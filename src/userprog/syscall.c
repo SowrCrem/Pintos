@@ -5,7 +5,7 @@
 #include "../threads/thread.h"
 #include "../devices/shutdown.h"
 #include "../userprog/process.h"
-#include "../userprog/pagedir.c"
+#include "../userprog/pagedir.h"
 #include "../threads/vaddr.h"
 
 #define MAX_CONSOLE_FILE_SIZE 500   /* Maximum Console File Size */
