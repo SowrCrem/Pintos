@@ -184,6 +184,7 @@ syscall_handler (struct intr_frame *f)
 
 			switch (*argc) {
 				case 0:
+					/* TODO: Add Exception Handing for if user enters a syscall and the wrong number of arguments for it */
 					result = func_pointer ();
 					break;
 				case 1:
