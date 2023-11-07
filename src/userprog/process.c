@@ -18,35 +18,59 @@
 #include "../threads/thread.h"
 #include "../threads/vaddr.h"
 
-#define MAX_ARGS 4
-
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
 
+/* Function to get number of arguments in a command line string */
+static int get_no_args(const char *command_line) 
+ {
+  int no_chars = 1;
+  int no_args = 0;
+
+  char *cur = *command_line;
+  bool in_space = false;
+
+  while (cur != '\0')
+   {
+    if (cur != ' ')
+     {
+      no_chars++;
+      if (!in_space)
+       {
+        no_args++;
+        in_space = true;
+       }
+     } else 
+      {
+        in_space = false;
+      }
+      cur = *(++command_line);
+   }
+   return no_args;
+ }
+
+
 /* Function to divide command line into words at spaces */
-static void parse_arguments(const char *command_line, char *argv[], int *argc)
+static void parse_arguments(const char *command_line, char **args, int argc)
 {
   char *token;
   char *save_ptr;
 
-  *argc = 0; /* Initialise argument count */
+  int i = 0; /* Initialise argument count */
 
   /* Use strtok_r to split the command line into words */
   for (token = strtok_r((char *)command_line, " ", &save_ptr); token != NULL; token = strtok_r(NULL, " ", &save_ptr)) 
   {
-    if (*argc < MAX_ARGS)
-     {
-      argv[(*argc)++] = token;
-     } else 
-      {
-        /* Too many arguments */
-	      printf("Too many arguments (%d) provided. Expected no more than %d", *argc, MAX_ARGS);
-        break;
-      }
+    int len = strlen(token) + 1;
+    args[i] = malloc(len * sizeof(char));
+    strlcpy(args[i], token, len);
+    i++;
   }
-  argv[*argc] = NULL; /* Set the last argument to NULL */
+  args[argc] = NULL; /* Set the last argument to NULL */
 
 }
+
+
 
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
@@ -65,32 +89,40 @@ process_execute (const char *file_name)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
 
-  /* argv will store the parsed arguments, and argc keeps track of the number of arguments */
-  char *argv[MAX_ARGS];
-  int argc = 0;
-
-  parse_arguments(file_name, argv, &argc);
+  char* save_ptr;
+  char* program_name = strtok_r(file_name, " ", &save_ptr);
 
   /* Create a new thread to execute FILE_NAME. This is the first item in argv */
-  tid = thread_create (argv[0], PRI_DEFAULT, start_process, fn_copy);
+  tid = thread_create (program_name, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
   return tid;
 }
 
-/* Sets up interrupt frame  SYSCALL_NO, ARGC, ARGV. */
-static void setup_frame (struct intr_frame *if_, int argc, char** argv) {
-	void *esp = if_->esp;
-	argc = *((int *) (esp + sizeof (int)));
-
-	for (int i = 0; i < argc; i++) {
-		/* Increment esp, retrieve current argument and add to argv array. */
-		esp += sizeof (char *);
-		/* Store the current argument in argv[i] to the pointer. */
-		*(char **)esp = argv[i];
-	}
+/* Push a string s onto the stack at esp */
+static void 
+push_string_to_stack(void **esp, char *s)
+{
+  int len = strlen(s) + 1;
+  *esp -= len;
+  strlcpy(*esp, s, len);
 }
 
+/* Push an int x onto the stack at esp */
+static void
+push_int_to_stack(void **esp, int x)
+{
+  *esp -= sizeof(int);
+  *((int *) *esp) = x;
+}
+
+/* Push a pointer ptr onto the stack at esp */
+static void 
+push_pointer_to_stack(void **esp, void *ptr)
+{
+  *esp -= sizeof (void *);
+  *((int **) *esp) = (int *) ptr;
+}
 
 /* A thread function that loads a user process and starts it
    running. */
@@ -107,18 +139,51 @@ start_process (void *file_name_)
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
 
-	/* Set up argc and argv arrays, update interrupt frame */
-	char *argv[MAX_ARGS];
-	int argc = 0;
-	parse_arguments(file_name, argv, &argc);
-	setup_frame(&if_, argc, argv);
+	/* Set up argc and args, argv arrays, update interrupt frame */
+  int argc = get_no_args(file_name_); /* Number of arguments */
+  char **args = (char**) malloc(sizeof(char*) * argc);  /* List of string arguments */
+  char **argv = (char**) malloc(sizeof(char*) * argc);  /* List of addresses of each string */
+	parse_arguments(file_name, args, argc);
 
-  success = load (argv[0], &if_.eip, &if_.esp);
+  success = load (args[0], &if_.eip, &if_.esp);
 
   /* If load failed, quit. */
   palloc_free_page (file_name);
   if (!success) 
     thread_exit ();
+
+  /* Push words to top of stack */
+  for (int i = argc - 1; i >= 0; i--) 
+   {
+    push_string_to_stack(&if_.esp, args[i]);
+    free(args[i]);
+
+    /* Update argv to have the address of string being pushed to stack */
+    argv[i] = (char *) if_.esp;
+   }
+   free(args);
+
+   /* Word alignment */
+   if_.esp -= ((int) if_.esp % sizeof (void *));
+
+   /* Push null pointer sentinel to stack */
+   push_pointer_to_stack(&if_.esp, NULL);
+
+   /* Push address of each string to stack */
+   for (int i = argc - 1; i >= 0; i--)
+    {
+      push_pointer_to_stack(&if_.esp, argv[i]);
+    }
+    free(argv);
+
+    /* Push argv to stack */
+    push_pointer_to_stack(&if_.esp, if_.esp);
+
+    /* Push argc to stack */
+    push_int_to_stack(&if_.esp, argc);
+
+    /* Push a fake return adress */
+    push_pointer_to_stack(&if_.esp, NULL);
 
 
   /* Start the user process by simulating a return from an
