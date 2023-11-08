@@ -208,8 +208,22 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
-  while (true) 
-    continue;
+  struct thread *calling_process = thread_current ();
+
+  /* Search through the rs_manager struct with the same child_tid */
+  struct rs_manager *child_rs_manager;
+  /* TODO: Add search functionality */
+
+  /* Check if child_rs_manager exists */
+  if (child_rs_manager == NULL)
+    return -1;
+  
+  /* Await termination of child process - omg use sema because allows semaphore to only be decremented once! */
+  /* TODO: Initialise semaphore to 1 */
+  sema_down(&child_rs_manager->wait_sema);
+
+  return child_rs_manager->exit_status;
+
 }
 
 /* Free the current process's resources. */

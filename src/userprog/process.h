@@ -2,6 +2,9 @@
 #define USERPROG_PROCESS_H
 
 #include "threads/thread.h"
+#include <debug.h>
+#include <list.h>
+#include <synch.h>
 
 tid_t process_execute (const char *file_name);
 int process_wait (tid_t);
@@ -14,6 +17,7 @@ struct rs_manager
         struct list children;    /* List of all child threads */
         struct list_elem elem;   /* Elem for rs_manager list  */
         int exit_status;         /* Exit status of the thread */
-    };∂
+        struct semaphore wait_sema; /* Semaphore to indicate termination of thread */
+    };
 
 #endif /* userprog/process.h */
