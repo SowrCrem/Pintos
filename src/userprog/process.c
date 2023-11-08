@@ -70,6 +70,20 @@ static void parse_arguments(const char *command_line, char **args, int argc)
 
 }
 
+/* Initialies an rs_manager */
+struct rs_manager
+rs_manager_init (struct thread *t)
+{
+  /* Dynamically allocate memory */
+  struct rs_manager *rs = malloc(sizeof(struct rs_manager));
+  assert (rs != NULL);
+  rs->parent = t;
+  rs->exit_status = 1; /* TODO: Define magic number */
+  sema_init (&rs->wait_sema, 0);
+  list_init (&rs->children);
+
+}
+
 
 
 /* Starts a new thread running a user program loaded from
@@ -206,20 +220,32 @@ start_process (void *file_name_)
  * This function will be implemented in task 2.
  * For now, it does nothing. */
 int
-process_wait (tid_t child_tid UNUSED) 
+process_wait (tid_t child_tid) 
 {
   struct thread *calling_process = thread_current ();
 
   /* Search through the rs_manager struct with the same child_tid */
-  struct rs_manager *child_rs_manager;
-  /* TODO: Add search functionality */
+  struct rs_manager *curr_rs_manager; /* TODO: Need to access rs_manager for calling process */
+  struct list *children = &curr_rs_manager->children;
 
-  /* Check if child_rs_manager exists */
-  if (child_rs_manager == NULL)
+  struct thread *child;
+  struct list_elem *e;
+  for (e = list_begin (children); e != list_end (children); e = list_next (children))
+  {
+    child = list_entry (e, struct thread, elem);
+    if (child->tid == child_tid)
+      break;
+    child = NULL;
+  }
+  
+  /* Check if child exists */
+  if (child == NULL)
     return -1;
+
+  /* TODO: need to access child's corresponding rs_manager */
+  struct rs_manager *child_rs_manager;
   
   /* Await termination of child process - omg use sema because allows semaphore to only be decremented once! */
-  /* TODO: Initialise semaphore to 1 */
   sema_down(&child_rs_manager->wait_sema);
 
   return child_rs_manager->exit_status;

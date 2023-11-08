@@ -4,7 +4,7 @@
 #include "threads/thread.h"
 #include <debug.h>
 #include <list.h>
-#include <synch.h>
+#include "threads/synch.h"
 
 tid_t process_execute (const char *file_name);
 int process_wait (tid_t);
