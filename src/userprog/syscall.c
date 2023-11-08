@@ -129,12 +129,17 @@ get_argc (struct intr_frame *if_)
 }
 
 /* Retrieves argument arg_num from argv array. */
-static int32_t*
+static int32_t
 syscall_get_arg (struct intr_frame *if_, int arg_num)
 {
-	int32_t arg = get_user_word_safe ((uint8_t *) if_->esp + (WORD_SIZE * (arg_num + 3)));
-	printf("Argument: %s", arg);
+	int32_t arg = get_user_word_safe ((uint8_t *) if_->esp + (WORD_SIZE * (arg_num)));
+	printf("Argument: %d\n", arg);
 	return arg;
+}
+
+static char*
+argv_get_arg (struct intr_frame *if_, int arg_num) {
+	// TODO
 }
 
 /* Checks if if_ contains an argument at arg_num */
@@ -346,6 +351,10 @@ static void setup_argv (struct intr_frame *if_, int syscall_no, char **argv) {
 	}
 	printf("Set up Args Successfully \n");
 	// TODO: print the argv array contents
+	printf("Argv Array Contents: \n");
+	for (int i=0; i<argc; i++)
+		printf("%s ", argv[i]);
+	printf("\n");
 }
 
 void
@@ -389,14 +398,14 @@ syscall_handler (struct intr_frame *if_)
 
 		/* Initialise and setup arguments. */
 		printf("Setting up arguments\n");
-		char **argv;
+		int argc = get_argc(if_);
+		char **argv = (char**) malloc(sizeof(char*) * argc);
 		printf("Calling function setup_argv\n");
 		setup_argv(if_, &syscall_no, argv);
 		uint32_t result;
 
 		/* Basic Syscall Handler */
 		void* (*func_pointer) () = system_call_function[syscall_no];
-		int argc = get_argc(if_);
 		syscall_execute_function(func_pointer, argc, argv, &result);
 
 		/* Store the Result in f->eax */
@@ -409,7 +418,7 @@ syscall_handler (struct intr_frame *if_)
 
 	/* Handler Finishes - Exit the current Thread */
 	printf("Ended Syscall Handler\n");
-	thread_exit();
+	terminate_userprog(SUCCESS_CODE);
 
 	printf("Shouldn't Print\n");
 }

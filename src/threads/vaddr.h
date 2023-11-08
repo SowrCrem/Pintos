@@ -7,6 +7,10 @@
 
 #include "threads/loader.h"
 
+/* Size definitions. */
+#define WORD_SIZE (4)                     /* Size of a word in bytes. */
+#define BYTE_SIZE_BITS (8)                /* Size of a byte in bits. */
+
 /* Functions and macros for working with virtual addresses.
 
    See pte.h for functions and macros specifically for x86

@@ -133,6 +133,7 @@ push_pointer_to_stack(void **esp, void *ptr)
 static void
 start_process (void *file_name_)
 {
+	printf("In start_process function\n");
   char *file_name = file_name_;
   struct intr_frame if_;
   bool success;
