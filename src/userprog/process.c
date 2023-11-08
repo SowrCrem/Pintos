@@ -82,6 +82,8 @@ rs_manager_init (struct thread *t)
   sema_init (&rs->wait_sema, 0);
   list_init (&rs->children);
 
+  /* TODO: Call this function in thread_init & init_thread */
+
 }
 
 
@@ -225,7 +227,7 @@ process_wait (tid_t child_tid)
   struct thread *calling_process = thread_current ();
 
   /* Search through the rs_manager struct with the same child_tid */
-  struct rs_manager *curr_rs_manager; /* TODO: Need to access rs_manager for calling process */
+  struct rs_manager *curr_rs_manager = calling_process->rs_manager; 
   struct list *children = &curr_rs_manager->children;
 
   struct thread *child;
@@ -243,7 +245,7 @@ process_wait (tid_t child_tid)
     return -1;
 
   /* TODO: need to access child's corresponding rs_manager */
-  struct rs_manager *child_rs_manager;
+  struct rs_manager *child_rs_manager = child->rs_manager;
   
   /* Await termination of child process - omg use sema because allows semaphore to only be decremented once! */
   sema_down(&child_rs_manager->wait_sema);

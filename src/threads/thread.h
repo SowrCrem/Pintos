@@ -4,7 +4,7 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
-
+#include "userprog/process.h"
 /* States in a thread's life cycle. */
 enum thread_status
   {
@@ -92,6 +92,8 @@ struct thread
 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
+
+    struct rs_manager *rs_manager;      /* Pointer to thread's rs_manager */
 
 		/* #ifdef USERPROG */
     /* Owned by userprog/process.c. */
