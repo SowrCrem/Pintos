@@ -79,6 +79,9 @@ static void parse_arguments(const char *command_line, char **args, int argc)
 tid_t
 process_execute (const char *file_name) 
 {
+	printf("In process_execute function\n");
+	printf("File Name: %s\n", file_name);
+
   char *fn_copy;
   tid_t tid;
 
@@ -91,6 +94,7 @@ process_execute (const char *file_name)
 
   char* save_ptr;
   char* program_name = strtok_r(file_name, " ", &save_ptr);
+	printf("Program Name: %s\n", program_name);
 
   /* Create a new thread to execute FILE_NAME. This is the first item in argv */
   tid = thread_create (program_name, PRI_DEFAULT, start_process, fn_copy);
