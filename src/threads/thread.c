@@ -98,6 +98,11 @@ thread_init (void)
   init_thread (initial_thread, "main", PRI_DEFAULT);
   initial_thread->status = THREAD_RUNNING;
   initial_thread->tid = allocate_tid ();
+
+  #ifdef USERPROG
+    rs_manager_init (initial_thread, NULL);
+  #endif
+
 }
 
 /* Starts preemptive thread scheduling by enabling interrupts.
@@ -483,7 +488,7 @@ init_thread (struct thread *t, const char *name, int priority)
   list_push_back (&all_list, &t->allelem);
 
   #ifdef USERPROG
-    rs_manager_init (t); /* TODO: Check if interrupts need to be disabled */
+    rs_manager_init (t, thread_current ()->rs_manager); /* TODO: Check if interrupts need to be disabled */
   #endif
 
   intr_set_level (old_level);

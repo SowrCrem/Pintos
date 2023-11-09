@@ -70,11 +70,10 @@ static void parse_arguments(const char *command_line, char **args, int argc)
 
 }
 
-/* Initialies an rs_manager */
+/* Initialies an rs_manager. This function is called for each thread creation */
 void
 rs_manager_init (struct thread *t, struct rs_manager *parent_rs_manager)
 {
-  /* Called every time a thread is created (thread_init, init_thread)*/
   /* Dynamically allocate memory */
   struct rs_manager *rs = malloc(sizeof(struct rs_manager));
   assert (rs != NULL);
@@ -84,10 +83,7 @@ rs_manager_init (struct thread *t, struct rs_manager *parent_rs_manager)
   sema_init (&rs->wait_sema, 0);
   list_init (&rs->children);
 
-  /* TODO: In thread_init -> set initial thread parent_manager to NULL*/
-  /* TODO: In init_thread -> set parent_manager to thread_current ()->rs_manager */
   rs->parent_rs_manager = parent_rs_manager;
-
 
 }
 
