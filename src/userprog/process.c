@@ -86,6 +86,28 @@ rs_manager_init (struct thread *t)
 
 }
 
+/* Frees the rs_manager */
+void 
+rs_manager_free (struct thread *t) 
+{
+  struct rs_manager *rs = t->rs_manager;
+
+  /* sema_up wait_sema, so can terminate */
+  sema_up (&rs->wait_sema);
+
+  /* Remove all the children from the list */
+  while (!list_empty (&rs->children))
+  {
+    list_pop_front (&rs->children);
+    /* TODO: Read through the spec for process_wait freeing */
+
+  }
+
+  t->rs_manager = NULL;
+
+
+}
+
 
 
 /* Starts a new thread running a user program loaded from
