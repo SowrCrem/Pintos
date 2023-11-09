@@ -101,6 +101,7 @@ thread_init (void)
 
   #ifdef USERPROG
     rs_manager_init (initial_thread, NULL);
+    printf(" Initialised thread_init process");
   #endif
 
 }
