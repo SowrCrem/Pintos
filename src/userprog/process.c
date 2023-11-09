@@ -77,12 +77,12 @@ rs_manager_init (struct thread *t)
   /* Dynamically allocate memory */
   struct rs_manager *rs = malloc(sizeof(struct rs_manager));
   assert (rs != NULL);
+
   rs->parent = t;
   rs->exit_status = RUNNING;
   sema_init (&rs->wait_sema, 0);
   list_init (&rs->children);
 
-  /* TODO: Call this function in thread_init & init_thread */
 
 }
 
@@ -273,6 +273,8 @@ process_wait (tid_t child_tid)
   /* Await termination of child process */
   struct rs_manager *child_rs_manager = child->rs_manager;
   sema_down(&child_rs_manager->wait_sema);
+
+  list_remove (&child->child_elem);
 
   return child_rs_manager->exit_status;
 
