@@ -87,6 +87,8 @@ rs_manager_init (struct thread *t, struct rs_manager *parent_rs_manager)
 
   /* Add rs_manager to parent rs_manager's list*/
   list_push_back (parent_rs_manager, &rs->child_elem);
+  
+  t->rs_manager = rs;
 
 }
 
