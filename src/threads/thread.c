@@ -481,6 +481,11 @@ init_thread (struct thread *t, const char *name, int priority)
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
+
+  #ifdef USERPROG
+    rs_manager_init (t); /* TODO: Check if interrupts need to be disabled */
+  #endif
+
   intr_set_level (old_level);
 }
 
