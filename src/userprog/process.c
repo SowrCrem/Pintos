@@ -227,14 +227,13 @@ process_wait (tid_t child_tid)
   struct thread *calling_process = thread_current ();
 
   /* Search through the rs_manager struct with the same child_tid */
-  struct rs_manager *curr_rs_manager = calling_process->rs_manager; 
-  struct list *children = &curr_rs_manager->children;
-
-  struct thread *child;
-  struct list_elem *e;
-  for (e = list_begin (children); e != list_end (children); e = list_next (children))
+  struct list *children = &calling_process->rs_manager->children;
+  struct thread *child = NULL;
+  for (struct list_elem *e = list_begin (children); e != list_end (children); 
+                                                    e = list_next (children))
   {
-    child = list_entry (e, struct thread, elem);
+    child = list_entry (e, struct thread, child_elem);
+    /* Match corresponding child_tid to the child thread */
     if (child->tid == child_tid)
       break;
     child = NULL;
@@ -243,11 +242,9 @@ process_wait (tid_t child_tid)
   /* Check if child exists */
   if (child == NULL)
     return -1;
-
-  /* TODO: need to access child's corresponding rs_manager */
-  struct rs_manager *child_rs_manager = child->rs_manager;
   
-  /* Await termination of child process - omg use sema because allows semaphore to only be decremented once! */
+  /* Await termination of child process */
+  struct rs_manager *child_rs_manager = child->rs_manager;
   sema_down(&child_rs_manager->wait_sema);
 
   return child_rs_manager->exit_status;

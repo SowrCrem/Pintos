@@ -15,7 +15,6 @@ struct rs_manager
     {
         struct thread *parent;   /* Point to parent thread    */
         struct list children;    /* List of all child threads */
-        struct list_elem elem;   /* Elem for rs_manager list  */
         int exit_status;         /* Exit status of the thread */
         struct semaphore wait_sema; /* Semaphore to indicate termination of thread */
     };
