@@ -13,15 +13,15 @@
 tid_t process_execute (const char *file_name);
 int process_wait (tid_t);
 void process_exit (void);
-void process_activate (void);
+void process_activate (vosid);
 
 struct rs_manager 
     {
-        /* TODO: Point to actual parent  */
-        struct thread *parent;   /* Point to parent thread    */ 
-        /* struct thread *thread*/  /* Points to actual thread */
-        struct list children;    /* List of all child threads */
+        struct rs_manager *parent_rs_manager; /* Points to thread's parent_rs_manager */
+        struct thread *thread  /* Points to actual thread */
+        struct list children;    /* List of all child rs_managers */
         int exit_status;         /* Exit status of the thread */
+        struct list_elem child_elem; /* List elem for child rs_manager */ 
         struct semaphore wait_sema; /* Semaphore to indicate termination of thread */
     };
 

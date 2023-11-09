@@ -98,7 +98,6 @@ struct thread
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
     struct rs_manager *rs_manager;      /* Pointer to thread's rs_manager */
-    struct list_elem child_elem;               /* List elem for child processes */ 
 		/* #endif */
 
     /* Owned by thread.c. */
