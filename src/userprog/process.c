@@ -89,15 +89,17 @@ rs_manager_init (struct thread *t, struct rs_manager *parent_rs_manager)
 
 /* Frees the rs_manager */
 void 
-rs_manager_free (struct thread *t) 
+rs_manager_free (struct rs_manager *rs) 
 {
-  struct rs_manager *rs = t->rs_manager;
 
   /* sema_up wait_sema, so can terminate */
   sema_up (&rs->wait_sema);
 
+
   /* If T's parent is running, don't delete T's rs_manager. */
   if (rs->parent_rs_manager->exit_status != RUNNING) {
+
+    rs_manager_free(rs->parent_rs_manager)
 
 
     /* Remove all the children from the list */
@@ -299,7 +301,7 @@ process_exit (void)
 {
   struct thread *cur = thread_current ();
   uint32_t *pd;
-  rs_manager_free (cur);
+  rs_manager_free (cur->rs_manager);
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
