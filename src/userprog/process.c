@@ -78,10 +78,12 @@ rs_manager_init (struct thread *t)
   struct rs_manager *rs = malloc(sizeof(struct rs_manager));
   assert (rs != NULL);
 
-  rs->parent = t;
+  rs->thread = t;
   rs->exit_status = RUNNING;
   sema_init (&rs->wait_sema, 0);
   list_init (&rs->children);
+  /* TODO: Check if initial thread will be set to itself */
+  rs->parent_rs_manager = thread_current ()->rs_manager;
 
 
 }
@@ -92,24 +94,26 @@ rs_manager_free (struct thread *t)
 {
   struct rs_manager *rs = t->rs_manager;
 
-  /* sema_up wait_sema, so can terminate */
-  sema_up (&rs->wait_sema);
+  /* If T's parent is running, don't delete T's rs_manager. */
+  if (rs->parent_rs_manager->exit_status != RUNNING) {
+    /* sema_up wait_sema, so can terminate */
+    sema_up (&rs->wait_sema);
 
-  /* Remove all the children from the list */
-  while (!list_empty (&rs->children))
-  {
-    struct list_elem *e = list_pop_front (&rs->children);
-    struct thread *t = list_entry(e, struct thread, child_elem);
+    /* Remove all the children from the list */
+    while (!list_empty (&rs->children))
+    {
+      struct list_elem *e = list_pop_front (&rs->children);
+      struct rs_manager *child_rs_manager = list_entry(e, struct rs_manager, child_elem);
 
-    /* If child thread is not running, free thread's rs_manager */
-    if (t->rs_manager->exit_status != 1)
-      rs_manager_free (t);
+      /* If child thread is not running, free thread's rs_manager */
+      if (child_rs_manager->exit_status != 1)
+        rs_manager_free (t);
 
+    }
+
+    free (rs);
+    t->rs_manager = NULL;
   }
-
-  free (rs);
-  t->rs_manager = NULL;
-
 
 }
 
@@ -139,6 +143,9 @@ process_execute (const char *file_name)
   tid = thread_create (program_name, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
+
+
+  
   return tid;
 }
 
@@ -259,7 +266,7 @@ process_wait (tid_t child_tid)
   for (struct list_elem *e = list_begin (children); e != list_end (children); 
                                                     e = list_next (children))
   {
-    child = list_entry (e, struct thread, child_elem);
+    child = list_entry (e, struct rs_manager, child_elem)->thread;
     /* Match corresponding child_tid to the child thread */
     if (child->tid == child_tid)
       break;
@@ -274,7 +281,8 @@ process_wait (tid_t child_tid)
   struct rs_manager *child_rs_manager = child->rs_manager;
   sema_down(&child_rs_manager->wait_sema);
 
-  list_remove (&child->child_elem);
+  /* Free Resouces of child */
+  list_remove (&child_rs_manager->child_elem);
 
   return child_rs_manager->exit_status;
 

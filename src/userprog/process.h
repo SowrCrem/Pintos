@@ -17,7 +17,9 @@ void process_activate (void);
 
 struct rs_manager 
     {
-        struct thread *parent;   /* Point to parent thread    */
+        /* TODO: Point to actual parent  */
+        struct thread *parent;   /* Point to parent thread    */ 
+        /* struct thread *thread*/  /* Points to actual thread */
         struct list children;    /* List of all child threads */
         int exit_status;         /* Exit status of the thread */
         struct semaphore wait_sema; /* Semaphore to indicate termination of thread */
