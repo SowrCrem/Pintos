@@ -100,7 +100,7 @@ rs_manager_free (struct rs_manager *rs)
   sema_up (&rs->wait_sema);
 
   /* If rs manager's parent that exists and is not running, free parent rs_manager  */
-  if (rs->parent_rs_manager->parent != NULL) 
+  if (rs->parent_rs_manager->thread != NULL) 
   {
     if (rs->parent_rs_manager->exit_status != RUNNING)
       rs_manager_free(rs->parent_rs_manager);
@@ -121,7 +121,7 @@ rs_manager_free (struct rs_manager *rs)
   /*TODO: Necessary? Since not nulled anywhere else */
   rs->parent_rs_manager = NULL; 
   rs->thread = NULL; 
-  rs->semaphore = NULL; 
+  // rs->wait_sema = NULL; 
 
   rs->thread->rs_manager = NULL;
 
