@@ -23,11 +23,12 @@ halt (void)
 static void
 exit (int status)
 {
+	struct thread *cur = thread_current ();
 	/* Output termination message (only if it is not a kernel thread). */
-	printf ("%s: exit(%d)\n", thread_current ()->name, status);
+	printf ("%s: exit(%d)\n", cur->name, status);
 
 	/* Send exit status to kernel */
-	thread_current ()->status = status;
+	cur->rs_manager->exit_status = status;
 
 	/* Terminate current process */
 	process_exit ();
