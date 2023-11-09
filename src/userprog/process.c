@@ -71,14 +71,14 @@ static void parse_arguments(const char *command_line, char **args, int argc)
 }
 
 /* Initialies an rs_manager */
-struct rs_manager
+void
 rs_manager_init (struct thread *t)
 {
   /* Dynamically allocate memory */
   struct rs_manager *rs = malloc(sizeof(struct rs_manager));
   assert (rs != NULL);
   rs->parent = t;
-  rs->exit_status = 1; /* TODO: Define magic number */
+  rs->exit_status = RUNNING;
   sema_init (&rs->wait_sema, 0);
   list_init (&rs->children);
 
@@ -98,11 +98,16 @@ rs_manager_free (struct thread *t)
   /* Remove all the children from the list */
   while (!list_empty (&rs->children))
   {
-    list_pop_front (&rs->children);
-    /* TODO: Read through the spec for process_wait freeing */
+    struct list_elem *e = list_pop_front (&rs->children);
+    struct thread *t = list_entry(e, struct thread, child_elem);
+
+    /* If child thread is not running, free thread's rs_manager */
+    if (t->rs_manager->exit_status != 1)
+      rs_manager_free (t);
 
   }
 
+  free (rs);
   t->rs_manager = NULL;
 
 
@@ -263,7 +268,7 @@ process_wait (tid_t child_tid)
   
   /* Check if child exists */
   if (child == NULL)
-    return -1;
+    return ERROR;
   
   /* Await termination of child process */
   struct rs_manager *child_rs_manager = child->rs_manager;
