@@ -91,36 +91,36 @@ rs_manager_init (struct thread *t, struct rs_manager *parent_rs_manager)
 void 
 rs_manager_free (struct rs_manager *rs) 
 {
-
   /* sema_up wait_sema, so can terminate */
   sema_up (&rs->wait_sema);
 
-
-  /* If T's parent is running, don't delete T's rs_manager. */
-  if (rs->parent_rs_manager->exit_status != RUNNING) {
-
-    rs_manager_free(rs->parent_rs_manager)
-
-
-    /* Remove all the children from the list */
-    while (!list_empty (&rs->children))
-    {
-      struct list_elem *e = list_pop_front (&rs->children);
-      struct rs_manager *child_rs_manager = list_entry(e, struct rs_manager, child_elem);
-
-      /* If child thread is not running, free thread's rs_manager */
-      if (child_rs_manager->exit_status != RUNNING)
-      {
-        rs_manager_free (child_rs_manager->thread);
-      }
-    }
-    t->parent_rs_manager = NULL; /*TODO: Necessary? Since not nulled anywhere else */
-    t->thread = NULL; /*TODO: Necessary? Since not nulled anywhere else */
-    t->semaphore = NULL; /*TODO: Necessary? Since not nulled anywhere else */
-
-    free (rs);
-    t->rs_manager = NULL;
+  /* If rs manager's parent that exists and is not running, free parent rs_manager  */
+  if (rs->parent_rs_manager->parent != NULL) 
+  {
+    if (rs->parent_rs_manager->exit_status != RUNNING)
+      rs_manager_free(rs->parent_rs_manager);
+    else
+      return;
   }
+  
+  /* Remove all the children from the list */
+  while (!list_empty (&rs->children))
+  {
+    struct list_elem *e = list_pop_front (&rs->children);
+    struct rs_manager *child_rs_manager = list_entry(e, struct rs_manager, child_elem);
+
+    /* If child thread is not running, free thread's rs_manager */
+    if (child_rs_manager->exit_status != RUNNING) 
+      rs_manager_free (child_rs_manager);
+  }
+  /*TODO: Necessary? Since not nulled anywhere else */
+  rs->parent_rs_manager = NULL; 
+  rs->thread = NULL; 
+  rs->semaphore = NULL; 
+
+  rs->thread->rs_manager = NULL;
+
+  free (rs);
 
 }
 
