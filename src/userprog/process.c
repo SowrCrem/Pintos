@@ -212,7 +212,11 @@ start_process (void *file_name_)
   /* If load failed, quit. */
   palloc_free_page (file_name);
   if (!success) 
+  {
+    /* If failed then error code set to - 1*/
+    thread_current ()->rs_manager->exit_status = ERROR;
     thread_exit ();
+  }
 
   /* Push words to top of stack */
   for (int i = argc - 1; i >= 0; i--) 
