@@ -70,63 +70,64 @@ static void parse_arguments(const char *command_line, char **args, int argc)
 
 }
 
-/* Initialies an process. This function is called for each thread creation */
+/* Initialises an process. This function is called for each thread creation */
 void
-process_init (struct thread *t, struct process *parent_process)
+process_init (struct thread *t, struct process *parent)
 {
   /* Dynamically allocate memory */
-  struct process *rs = malloc(sizeof(struct process));
-  assert (rs != NULL);
+  struct process *p = malloc(sizeof(struct process));
+  assert (p != NULL);
 
-  rs->thread = t;
-  rs->exit_status = NOT_EXITED;
-  sema_init (&rs->wait_sema, 0);
-  list_init (&rs->children);
+  p->thread = t;
+  p->exit_status = NOT_EXITED;
+  sema_init (&p->wait_sema, 0);
+  list_init (&p->children);
 
-  rs->parent_process = parent_process;
+  p->parent_process = parent;
 
   /* Add process to parent process's list*/
-  list_push_back (parent_process, &rs->child_elem);
+  list_push_back (parent, &p->child_elem);
 
-  t->process = rs;
+  t->process = p;
 
 }
 
 /* Frees the process */
 void 
-process_free (struct process *rs) 
+process_free (struct process *p) 
 {
   /* sema_up wait_sema, so can terminate */
-  sema_up (&rs->wait_sema);
+  sema_up (&p->wait_sema);
 
-  /* If rs manager's parent that exists and is not NOT_EXITED, free parent process  */
-  if (rs->parent_process->thread != NULL) 
+  /* If process's parent that exists and is not NOT_EXITED, free parent process  */
+  if (p->parent_process->thread != NULL) 
   {
-    if (rs->parent_process->exit_status != NOT_EXITED)
-      process_free(rs->parent_process);
+    if (p->parent_process->exit_status != NOT_EXITED)
+    {
+      process_free(p->parent_process);
+    }
     else
+    {
       return;
+    }
   }
   
   /* Remove all the children from the list */
-  while (!list_empty (&rs->children))
+  while (!list_empty (&p->children))
   {
-    struct list_elem *e = list_pop_front (&rs->children);
+    struct list_elem *e = list_pop_front (&p->children);
     struct process *child_process = list_entry(e, struct process, child_elem);
 
     /* If child thread is not NOT_EXITED, free thread's process */
-    if (child_process->exit_status != NOT_EXITED) 
+    if (child_process->exit_status != NOT_EXITED)
+    {
       process_free (child_process);
+    } 
   }
-  /*TODO: Necessary? Since not nulled anywhere else */
-  rs->parent_process = NULL; 
-  rs->thread = NULL; 
-  // rs->wait_sema = NULL; 
 
-  rs->thread->process = NULL;
+  p->thread->process = NULL;
 
-  free (rs);
-
+  free (p);
 }
 
 
@@ -212,7 +213,11 @@ start_process (void *file_name_)
   /* If load failed, quit. */
   palloc_free_page (file_name);
   if (!success) 
+  {
+    /* Set boolean to set exit status to ERROR in thread_set_priority. */
+    thread_current ()->process->success = false;
     thread_exit ();
+  }
 
   /* Push words to top of stack */
   for (int i = argc - 1; i >= 0; i--) 
