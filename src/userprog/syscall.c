@@ -9,13 +9,13 @@
 #include "../threads/vaddr.h"
 #include "../lib/syscall-nr.h"
 
-#define MAX_CONSOLE_FILE_SIZE 500   /* Maximum Console File Size */
+#define MAX_CONSOLE_FILE_SIZE 500		/* Maximum console file size. */
 
-#define SYS_MIN SYS_HALT  /* Minimum System Call Number */
-#define SYS_MAX SYS_CLOSE /* Maximum System Call Number */
+#define SYS_MIN SYS_HALT  /* Minimum system call number. */
+#define SYS_MAX SYS_CLOSE /* Maximum system call number. */
 
 
-/* Memory Access Functions */
+/* Memory access functions. */
 static int get_user (const uint8_t *uaddr);
 static bool put_user (uint8_t *udst, uint8_t byte);
 static int get_user_safe (const uint8_t *uaddr);
@@ -26,7 +26,7 @@ static bool syscall_invalid_arg (struct intr_frame *if_, int arg_num);
 static bool syscall_get_args (struct intr_frame *if_, int argc, char** argv);
 static void terminate_userprog (int status);
 
-/* System Call Functions */
+/* System call functions. */
 static void syscall_halt (void);
 static void syscall_exit (int status);
 static pid_t syscall_exec (const char *file);
@@ -41,16 +41,16 @@ static void syscall_seek (int fd, unsigned position);
 static unsigned syscall_tell (int fd);
 static void syscall_close (int fd);
 
-/* Call Handler Functions */
+/* Call handler functions. */
 static void syscall_handler (struct intr_frame *);
 
 
-/* Memory Access Functions */
+/* Memory access functions. */
 
 /* Reads a byte at user virtual address UADDR.
-  UADDR must be below PHYS_BASE.
-  Returns the byte value if successful, -1 if a segfault
-  occurred. */
+   UADDR must be below PHYS_BASE.
+   Returns the byte value if successful, -1 if a segfault
+   occurred. */
 static int
 get_user (const uint8_t *uaddr)
 {
@@ -61,8 +61,8 @@ get_user (const uint8_t *uaddr)
 }
 
 /* Writes BYTE to user address UDST.
-  UDST must be below PHYS_BASE.
-  Returns true if successful, false if a segfault occurred. */
+   UDST must be below PHYS_BASE.
+   Returns true if successful, false if a segfault occurred. */
 static bool
 put_user (uint8_t *udst, uint8_t byte)
 {
@@ -72,16 +72,18 @@ put_user (uint8_t *udst, uint8_t byte)
 	return error_code != -1;
 }
 
-/* Checks if UADDR is valid (Points below PHYS_BASE) and retrieves if it is. Returns -1 otherwise. */
+/* Checks if UADDR is valid (Points below PHYS_BASE) and retrieves if it is. 
+   Returns -1 otherwise. */
 static int
 get_user_safe (const uint8_t *uaddr)
 {
-	if (is_user_vaddr (uaddr)) /* Checks if uaddr is below PHYS_BASE */
+	if (is_user_vaddr (uaddr)) /* Checks if UADDR is below PHYS_BASE */
 		return get_user (uaddr);
 	return ERROR_CODE;
 }
 
-/* Checks if UADDR is valid (Points below PHYS_BASE) and writes BYTE to it if it is.  Returns false otherwise. */
+/* Checks if UADDR is valid (Points below PHYS_BASE) and writes BYTE to it if it is.
+	 Returns false otherwise. */
 static bool
 put_user_safe (uint8_t *udst, uint8_t byte)
 {
@@ -108,7 +110,7 @@ get_user_word_safe (const uint8_t *uaddr)
 	return word;
 }
 
-/* Returns System Call Number for a given Interrupt Frame if_, -1 if not Successful */
+/* Returns system call number for a given interrupt frame if_, -1 if not successful */
 static int32_t
 get_syscall_no (struct intr_frame *if_)
 {
@@ -118,7 +120,7 @@ get_syscall_no (struct intr_frame *if_)
 	return syscall_no;
 }
 
-/* Returns argc for a given Interrupt Frame if_, -1 if not Successful */
+/* Returns argc for a given interrupt frame if_, -1 if not successful */
 static int
 get_argc (struct intr_frame *if_)
 {
@@ -149,7 +151,8 @@ syscall_invalid_arg (struct intr_frame *if_, int arg_num)
 	return syscall_get_arg (if_, arg_num) == ERROR_CODE;
 }
 
-/* Populates argv array. If at any point an argument is invalid (i.e. not enough arguments provided), returns false */
+/* Populates argv array. If at any point an argument is invalid 
+	 (i.e. not enough arguments provided), returns false */
 static bool
 syscall_get_args (struct intr_frame *if_, int argc, char** argv)
 {
@@ -167,7 +170,7 @@ syscall_get_args (struct intr_frame *if_, int argc, char** argv)
 
 /* System Call Functions */
 
-/* Terminates a user process with given status */
+/* Terminates a user process with given status. */
 static void
 terminate_userprog (int status)
 {
@@ -195,7 +198,7 @@ syscall_exit (int status)
 {
 	struct thread *cur = thread_current ();
 	/* Output termination message (only if it is not a kernel thread). */
-	printf ("%s: exit(%d)\n", cur->name, status);
+	printf ("%s: exit(%d)\n", cur->name, status); 
 
 	/* Send exit status to kernel */
 	cur->rs_manager->exit_status = status;
@@ -222,18 +225,26 @@ syscall_wait (pid_t pid)
 	return 0;
 }
 
+/* Creates a new file called file initially initial size bytes in size. 
+	 Returns true if successful, false otherwise.
+	 Creating a new file does not open it: opening the new file is a separate operation
+	 which would require a open system call. */
 static bool
 syscall_create (const char *file, unsigned initial_size)
 {
-	/* TODO */
-	return 0;
+	return filesys_create (file, initial_size);
 }
 
+/* Deletes the file called file. Returns true if successful, false otherwise. 
+	 A file may be removed regardless of whether it is open or closed, and removing 
+	 an open file does not close it. */
 static bool
 syscall_remove (const char *file)
 {
-	/* TODO */
-	return 0;
+	if (file == NULL)
+		return false;
+
+	return filesys_remove (file);
 }
 
 static int
