@@ -221,8 +221,9 @@ syscall_exec (const char *file)
 static int
 syscall_wait (pid_t pid)
 {
-	/* TODO */
-	return 0;
+	tid_t tid = (tid_t) pid;
+	return process_wait (tid);
+
 }
 
 /* Creates a new file called file initially initial size bytes in size. 
