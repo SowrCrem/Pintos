@@ -100,7 +100,7 @@ thread_init (void)
   initial_thread->tid = allocate_tid ();
 
   #ifdef USERPROG
-    rs_manager_init (initial_thread, NULL);
+    process_init (initial_thread, NULL);
     printf(" Initialised thread_init process");
   #endif
 
@@ -485,13 +485,14 @@ init_thread (struct thread *t, const char *name, int priority)
   t->priority = priority;
   t->magic = THREAD_MAGIC;
 
+
   #ifdef USERPROG
-    /* */
-    rs_manager_init (t, thread_current ()->rs_manager);
+    process_init (t, thread_current ()->process);
   #endif
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
+
   intr_set_level (old_level);
 }
 

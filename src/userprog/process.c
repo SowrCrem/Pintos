@@ -70,66 +70,60 @@ static void parse_arguments(const char *command_line, char **args, int argc)
 
 }
 
-/* Initialies an rs_manager. This function is called for each thread creation */
+/* Initialies an process. This function is called for each thread creation */
 void
-rs_manager_init (struct thread *t, struct rs_manager *parent_rs_manager)
+process_init (struct thread *t, struct process *parent_process)
 {
   /* Dynamically allocate memory */
-  struct rs_manager *rs = malloc(sizeof(struct rs_manager));
-  ASSERT (rs != NULL);
+  struct process *rs = malloc(sizeof(struct process));
+  assert (rs != NULL);
 
   rs->thread = t;
   rs->exit_status = NOT_EXITED;
-  rs->success = true;
   sema_init (&rs->wait_sema, 0);
   list_init (&rs->children);
 
-  rs->parent_rs_manager = parent_rs_manager;
+  rs->parent_process = parent_process;
 
-  /* Add rs_manager to parent rs_manager's list*/
-  list_push_back (parent_rs_manager, &rs->child_elem);
-  
-  t->rs_manager = rs;
+  /* Add process to parent process's list*/
+  list_push_back (parent_process, &rs->child_elem);
+
+  t->process = rs;
 
 }
 
-/* Frees the rs_manager */
+/* Frees the process */
 void 
-rs_manager_free (struct rs_manager *rs) 
+process_free (struct process *rs) 
 {
-  /* Set exit status. */
-  if (rs->success) 
-  {
-    rs->exit_status = SUCCESS;
-  } else {
-    rs->exit_status = ERROR;
-  }
-
   /* sema_up wait_sema, so can terminate */
   sema_up (&rs->wait_sema);
 
-  /* If rs manager's parent that exists and is not running, free parent rs_manager. */
-  if (rs->parent_rs_manager->thread != NULL) 
+  /* If rs manager's parent that exists and is not NOT_EXITED, free parent process  */
+  if (rs->parent_process->thread != NULL) 
   {
-    if (rs->parent_rs_manager->exit_status != NOT_EXITED)
-    {
-      rs_manager_free(rs->parent_rs_manager);
-    } else 
-    {
+    if (rs->parent_process->exit_status != NOT_EXITED)
+      process_free(rs->parent_process);
+    else
       return;
-    }
   }
   
   /* Remove all the children from the list */
   while (!list_empty (&rs->children))
   {
     struct list_elem *e = list_pop_front (&rs->children);
-    struct rs_manager *child_rs_manager = list_entry(e, struct rs_manager, child_elem);
+    struct process *child_process = list_entry(e, struct process, child_elem);
 
-    /* If child thread is not running, free thread's rs_manager */
-    if (child_rs_manager->exit_status != NOT_EXITED) 
-      rs_manager_free (child_rs_manager);
+    /* If child thread is not NOT_EXITED, free thread's process */
+    if (child_process->exit_status != NOT_EXITED) 
+      process_free (child_process);
   }
+  /*TODO: Necessary? Since not nulled anywhere else */
+  rs->parent_process = NULL; 
+  rs->thread = NULL; 
+  // rs->wait_sema = NULL; 
+
+  rs->thread->process = NULL;
 
   free (rs);
 
@@ -137,16 +131,13 @@ rs_manager_free (struct rs_manager *rs)
 
 
 
-/* Starts a new thread running a user program loaded from
+/* Starts a new thread NOT_EXITED a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
    before process_execute() returns.  Returns the new process's
    thread id, or TID_ERROR if the thread cannot be created. */
 tid_t
 process_execute (const char *file_name) 
 {
-	printf("In process_execute function\n");
-	printf("File Name: %s\n", file_name);
-
   char *fn_copy;
   tid_t tid;
 
@@ -159,7 +150,6 @@ process_execute (const char *file_name)
 
   char* save_ptr;
   char* program_name = strtok_r(file_name, " ", &save_ptr);
-	printf("Program Name: %s\n", program_name);
 
   /* Create a new thread to execute FILE_NAME. This is the first item in argv */
   tid = thread_create (program_name, PRI_DEFAULT, start_process, fn_copy);
@@ -197,11 +187,10 @@ push_pointer_to_stack(void **esp, void *ptr)
 }
 
 /* A thread function that loads a user process and starts it
-   running. */
+   NOT_EXITED. */
 static void
 start_process (void *file_name_)
 {
-	printf("In start_process function\n");
   char *file_name = file_name_;
   struct intr_frame if_;
   bool success;
@@ -283,13 +272,13 @@ process_wait (tid_t child_tid)
 {
   struct thread *calling_process = thread_current ();
 
-  /* Search through the rs_manager struct with the same child_tid */
-  struct list *children = &calling_process->rs_manager->children;
+  /* Search through the process struct with the same child_tid */
+  struct list *children = &calling_process->process->children;
   struct thread *child = NULL;
   for (struct list_elem *e = list_begin (children); e != list_end (children); 
                                                     e = list_next (children))
   {
-    child = list_entry (e, struct rs_manager, child_elem)->thread;
+    child = list_entry (e, struct process, child_elem)->thread;
     /* Match corresponding child_tid to the child thread */
     if (child->tid == child_tid)
       break;
@@ -301,13 +290,13 @@ process_wait (tid_t child_tid)
     return ERROR;
   
   /* Await termination of child process */
-  struct rs_manager *child_rs_manager = child->rs_manager;
-  sema_down(&child_rs_manager->wait_sema);
+  struct process *child_process = child->process;
+  sema_down(&child_process->wait_sema);
 
   /* Free Resouces of child */
-  list_remove (&child_rs_manager->child_elem);
+  list_remove (&child_process->child_elem);
 
-  return child_rs_manager->exit_status;
+  return child_process->exit_status;
 
 }
 
@@ -317,9 +306,7 @@ process_exit (void)
 {
   struct thread *cur = thread_current ();
   uint32_t *pd;
-
-  /* Free memory for rs_manager if certain conditions met. */
-  rs_manager_free (cur->rs_manager);
+  process_free (cur->process);
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
@@ -339,7 +326,7 @@ process_exit (void)
     }
 }
 
-/* Sets up the CPU for running user code in the current
+/* Sets up the CPU for NOT_EXITED user code in the current
    thread.
    This function is called on every context switch. */
 void

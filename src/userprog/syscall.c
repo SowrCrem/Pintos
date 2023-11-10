@@ -201,7 +201,7 @@ syscall_exit (int status)
 	printf ("%s: exit(%d)\n", cur->name, status); 
 
 	/* Send exit status to kernel */
-	cur->rs_manager->exit_status = status;
+	cur->process->exit_status = status;
 
 	/* Terminate current process */
 	process_exit ();
