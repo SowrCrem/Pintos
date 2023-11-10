@@ -232,7 +232,11 @@ syscall_wait (pid_t pid)
 static bool
 syscall_create (const char *file, unsigned initial_size)
 {
-	return filesys_create (file, initial_size);
+	lock_acquire (&filesys_lock);
+	bool result = filesys_create (file);
+	lock_release (&filesys_lock);
+
+	return result;
 }
 
 /* Deletes the file called file. Returns true if successful, false otherwise. 
@@ -244,9 +248,11 @@ syscall_remove (const char *file)
 	if (file == NULL)
 		return false;
 
+	lock_acquire (&filesys_lock);
 	bool result = filesys_remove (file);
+	lock_release (&filesys_lock);
 
-	return filesys_remove (file);
+	return result;
 }
 
 static int

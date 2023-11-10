@@ -94,7 +94,7 @@ thread_init (void)
   list_init (&all_list);
 
   /* Initialised file system lock */
-  lock_init (filesys_lock);
+  lock_init (&filesys_lock); /* TODO: Is this correct to add in here */
 
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();
