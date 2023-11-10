@@ -3,7 +3,6 @@
         "synch.h": "c",
         "stdint.h": "c",
         "process.h": "c",
-        "__threading_support": "c",
-        "thread.h": "c"
+        "__threading_support": "c"
     }
 }
