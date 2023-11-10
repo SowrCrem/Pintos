@@ -14,6 +14,10 @@ typedef int tid_t;
 #define SUCCESS 0                           /* Process exited normally. */
 #define NOT_EXITED 1                        /* Process has not exited. */
 
+/* Exit status definitions. */
+#define SUCCESS_CODE (0)                /* Success code. */
+#define ERROR_CODE (-1)                 /* Error code. */
+
 tid_t process_execute (const char *file_name);
 int process_wait (tid_t);
 void process_exit (void);
