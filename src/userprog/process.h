@@ -9,6 +9,10 @@
 /* Wasn't compiling without this typedef from thread.h */
 typedef int tid_t;
 
+
+/* Global variable for filesystem lock */
+struct lock *filesys_lock;
+
 /* Process exit status codes. */
 #define ERROR -1                            /* Process exited in error. */
 #define SUCCESS 0                           /* Process exited normally. */

@@ -244,6 +244,8 @@ syscall_remove (const char *file)
 	if (file == NULL)
 		return false;
 
+	bool result = filesys_remove (file);
+
 	return filesys_remove (file);
 }
 
