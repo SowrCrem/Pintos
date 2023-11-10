@@ -76,7 +76,7 @@ rs_manager_init (struct thread *t, struct rs_manager *parent_rs_manager)
 {
   /* Dynamically allocate memory */
   struct rs_manager *rs = malloc(sizeof(struct rs_manager));
-  assert (rs != NULL);
+  ASSERT (rs != NULL);
 
   rs->thread = t;
   rs->exit_status = RUNNING;
