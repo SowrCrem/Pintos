@@ -193,10 +193,15 @@ syscall_halt (void)
 static void
 syscall_exit (int status)
 {
-	/* TODO: Need to get correct status from process struct and set parent status to same */
+	struct thread *cur = thread_current ();
+	/* Output termination message (only if it is not a kernel thread). */
+	printf ("%s: exit(%d)\n", cur->name, status);
 
-	/* Terminate current program */
-	terminate_userprog (status);
+	/* Send exit status to kernel */
+	cur->rs_manager->exit_status = status;
+
+	/* Terminate current process */
+	process_exit ();
 }
 
 /* Runs the executable whose name is given in cmd line, passing any given arguments, and

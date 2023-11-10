@@ -98,6 +98,12 @@ thread_init (void)
   init_thread (initial_thread, "main", PRI_DEFAULT);
   initial_thread->status = THREAD_RUNNING;
   initial_thread->tid = allocate_tid ();
+
+  #ifdef USERPROG
+    rs_manager_init (initial_thread, NULL);
+    printf(" Initialised thread_init process");
+  #endif
+
 }
 
 /* Starts preemptive thread scheduling by enabling interrupts.
@@ -478,6 +484,11 @@ init_thread (struct thread *t, const char *name, int priority)
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
   t->magic = THREAD_MAGIC;
+
+  #ifdef USERPROG
+    /* */
+    rs_manager_init (t, thread_current ()->rs_manager);
+  #endif
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
