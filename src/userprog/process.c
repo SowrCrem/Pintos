@@ -80,6 +80,7 @@ rs_manager_init (struct thread *t, struct rs_manager *parent_rs_manager)
 
   rs->thread = t;
   rs->exit_status = NOT_EXITED;
+  rs->success = true;
   sema_init (&rs->wait_sema, 0);
   list_init (&rs->children);
 
