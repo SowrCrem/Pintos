@@ -12,22 +12,26 @@ typedef int tid_t;
 /* Process exit status codes. */
 #define ERROR -1                            /* Process exited in error. */
 #define SUCCESS 0                           /* Process exited normally. */
-#define RUNNING 1                           /* Process is running. */
+#define NOT_EXITED 1                        /* Process has not exited. */
 
 tid_t process_execute (const char *file_name);
 int process_wait (tid_t);
 void process_exit (void);
-void process_activate (vosid);
+void process_activate (void);
 
+/* A relationship manager for user processes. 
 
+   Each user process has an rs_manager, used to store its children
+   and its exit status. */
 struct rs_manager 
 {
     struct rs_manager *parent_rs_manager;   /* Pointer to thread's parent rs_manager. */
     struct list children;                   /* List of all child rs_manager. */
     struct list_elem child_elem;            /* List elem for children list.  */ 
 
-    struct thread *thread;                  /* Pointer to actual thread. */
+    struct thread *thread;                  /* Pointer to actual THREAD. */
     
+    bool success;                           /* Boolean for THREAD exit status. */
     int exit_status;                        /* Exit status of THREAD. */
     struct semaphore wait_sema;             /* Semaphore for waiting on THREAD. */
 };

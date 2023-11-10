@@ -79,7 +79,7 @@ rs_manager_init (struct thread *t, struct rs_manager *parent_rs_manager)
   ASSERT (rs != NULL);
 
   rs->thread = t;
-  rs->exit_status = RUNNING;
+  rs->exit_status = NOT_EXITED;
   sema_init (&rs->wait_sema, 0);
   list_init (&rs->children);
 
@@ -96,16 +96,27 @@ rs_manager_init (struct thread *t, struct rs_manager *parent_rs_manager)
 void 
 rs_manager_free (struct rs_manager *rs) 
 {
+  /* Set exit status. */
+  if (rs->success) 
+  {
+    rs->exit_status = SUCCESS;
+  } else {
+    rs->exit_status = ERROR;
+  }
+
   /* sema_up wait_sema, so can terminate */
   sema_up (&rs->wait_sema);
 
-  /* If rs manager's parent that exists and is not running, free parent rs_manager  */
+  /* If rs manager's parent that exists and is not running, free parent rs_manager. */
   if (rs->parent_rs_manager->thread != NULL) 
   {
-    if (rs->parent_rs_manager->exit_status != RUNNING)
+    if (rs->parent_rs_manager->exit_status != NOT_EXITED)
+    {
       rs_manager_free(rs->parent_rs_manager);
-    else
+    } else 
+    {
       return;
+    }
   }
   
   /* Remove all the children from the list */
@@ -115,15 +126,9 @@ rs_manager_free (struct rs_manager *rs)
     struct rs_manager *child_rs_manager = list_entry(e, struct rs_manager, child_elem);
 
     /* If child thread is not running, free thread's rs_manager */
-    if (child_rs_manager->exit_status != RUNNING) 
+    if (child_rs_manager->exit_status != NOT_EXITED) 
       rs_manager_free (child_rs_manager);
   }
-  /*TODO: Necessary? Since not nulled anywhere else */
-  rs->parent_rs_manager = NULL; 
-  rs->thread = NULL; 
-  // rs->wait_sema = NULL; 
-
-  rs->thread->rs_manager = NULL;
 
   free (rs);
 
@@ -306,6 +311,8 @@ process_exit (void)
 {
   struct thread *cur = thread_current ();
   uint32_t *pd;
+
+  /* Free memory for rs_manager if certain conditions met. */
   rs_manager_free (cur->rs_manager);
 
   /* Destroy the current process's page directory and switch back

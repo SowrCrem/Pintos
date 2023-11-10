@@ -485,13 +485,13 @@ init_thread (struct thread *t, const char *name, int priority)
   t->priority = priority;
   t->magic = THREAD_MAGIC;
 
-  old_level = intr_disable ();
-  list_push_back (&all_list, &t->allelem);
-
   #ifdef USERPROG
-    rs_manager_init (t, thread_current ()->rs_manager); /* TODO: Check if interrupts need to be disabled */
+    /* */
+    rs_manager_init (t, thread_current ()->rs_manager);
   #endif
 
+  old_level = intr_disable ();
+  list_push_back (&all_list, &t->allelem);
   intr_set_level (old_level);
 }
 
