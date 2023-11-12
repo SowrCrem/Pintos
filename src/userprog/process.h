@@ -35,6 +35,9 @@ struct process
     struct list_elem child_elem;            /* List elem for children list.  */ 
 
     struct thread *thread;                  /* Pointer to actual THREAD. */
+
+    bool loaded;                            /* Boolean for PROCESS loading executable */
+    struct semaphore load_sema;             /* Control parent process when child loading executable */
     
     bool success;                           /* Boolean for THREAD exit status. */
     int exit_status;                        /* Exit status of THREAD. */
