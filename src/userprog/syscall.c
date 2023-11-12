@@ -213,8 +213,49 @@ syscall_exit (int status)
 static pid_t
 syscall_exec (const char *file)
 {
-	/* TODO */
-	return 0;
+	/* Runs executable of given cmd line file */
+	pid_t pid = (pid_t) process_execute (file);
+	/* Returns the new process program pid */
+
+	/* Check validity of pid */
+	if (pid == TID_ERROR)
+	{
+		return (pid_t) ERROR_CODE;
+	}
+
+	/* Cannot load or run for any reason */
+
+	/* Find the file's corresponding process */
+	struct list *children = &thread_current ()->process->children;
+  	struct process *process;
+	for (struct list_elem *e = list_begin (children); e != list_end (children); 
+													e = list_next (children))
+	{
+		process = list_entry (e, struct process, child_elem)->thread;
+		/* Match corresponding child_tid to the child thread */
+		if (process->thread->tid == (tid_t) pid)
+		break;
+		process = NULL;
+	}
+
+	/* Check process validity */
+	if (process->thread->tid == NULL)
+	{
+		return (pid_t) ERROR_CODE;
+	}
+
+	/* Block parent process (cur) from running when child attempting to load executable */
+	
+	/* Check if loaded (may need bool similar to wait / success)*/
+
+	return pid;
+
+
+
+
+
+
+	return pid;
 }
 
 /* Waits for a child process pid and retrieves the child’s exit status. */
