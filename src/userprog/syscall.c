@@ -1,6 +1,8 @@
 #include "../userprog/syscall.h"
 #include <stdio.h>
+#include <stdlib.h>
 #include <syscall-nr.h>
+#include "filesys/filesys.h"
 #include "../threads/interrupt.h"
 #include "../threads/thread.h"
 #include "../devices/shutdown.h"
@@ -224,31 +226,32 @@ syscall_exec (const char *file)
 	}
 
 	/* Cannot load or run for any reason */
+	struct process *parent = thread_current ()->process;
 
 	/* Find the file's corresponding process */
-	struct list *children = &thread_current ()->process->children;
-  	struct process *process;
+	struct list *children = &parent->children;
+  	struct process *child;
 	for (struct list_elem *e = list_begin (children); e != list_end (children); 
-													e = list_next (children))
+													e = list_next (e))
 	{
-		process = list_entry (e, struct process, child_elem)->thread;
+		child = list_entry (e, struct process, child_elem);
 		/* Match corresponding child_tid to the child thread */
-		if (process->thread->tid == (tid_t) pid)
+		if (child->thread->tid == (tid_t) pid)
 		break;
-		process = NULL;
+		child = NULL;
 	}
 
 	/* Check process validity */
-	if (process->thread->tid == NULL)
+	if (child->thread->tid == NULL)
 	{
 		return (pid_t) ERROR_CODE;
 	}
 
 	/* Block parent process (cur) from running when child attempting to load executable */
-	sema_down (&process->load_sema);
+	sema_down (&parent->load_sema);
 
 	/* Check if loaded */
-	if (!process->loaded)
+	if (!child->loaded)
 	{
 		return (pid_t) ERROR_CODE;
 	}
@@ -273,7 +276,7 @@ static bool
 syscall_create (const char *file, unsigned initial_size)
 {
 	lock_acquire (&filesys_lock);
-	bool result = filesys_create (file);
+	bool result = filesys_create (file, initial_size);
 	lock_release (&filesys_lock);
 
 	return result;
@@ -321,7 +324,7 @@ syscall_write (int fd, const void *buffer, unsigned size)
 {
 	if (!(size > MAX_CONSOLE_FILE_SIZE))
 	{
-		if (fd == STDOUT_FILENO)
+		if (fd == 1)
 		{
 			putbuf((char*) buffer, size);
 		}

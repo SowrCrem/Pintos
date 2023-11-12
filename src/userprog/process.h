@@ -6,7 +6,7 @@
 #include <debug.h>
 #include <list.h>
 
-/* Wasn't compiling without this typedef from thread.h */
+/* Wasn't compiling withoßut this typedef from thread.h */
 typedef int tid_t;
 
 
@@ -22,10 +22,6 @@ struct lock filesys_lock;
 #define SUCCESS_CODE (0)                /* Success code. */
 #define ERROR_CODE (-1)                 /* Error code. */
 
-tid_t process_execute (const char *file_name);
-int process_wait (tid_t);
-void process_exit (void);
-void process_activate (void);
 
 /* Process Struct */
 struct process 
@@ -43,5 +39,14 @@ struct process
     int exit_status;                        /* Exit status of THREAD. */
     struct semaphore wait_sema;             /* Semaphore for waiting on THREAD. */
 };
+
+
+tid_t process_execute (const char *file_name);
+int process_wait (tid_t);
+void process_exit (void);
+void process_activate (void);
+
+void process_init (struct thread *t, struct process *parent);
+void process_free (struct process *p);
 
 #endif /* userprog/process.h */

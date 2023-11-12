@@ -76,7 +76,7 @@ process_init (struct thread *t, struct process *parent)
 {
   /* Dynamically allocate memory */
   struct process *p = malloc(sizeof(struct process));
-  assert (p != NULL);
+  //assert (p != NULL);
 
   p->thread = t;
   p->exit_status = NOT_EXITED;
@@ -86,7 +86,7 @@ process_init (struct thread *t, struct process *parent)
   p->parent_process = parent;
 
   /* Add process to parent process's list*/
-  list_push_back (parent, &p->child_elem);
+  list_push_back (&parent->children, &p->child_elem);
 
   t->process = p;
 
@@ -210,12 +210,16 @@ start_process (void *file_name_)
 
   success = load (args[0], &if_.eip, &if_.esp);
 
+  struct process *p = thread_current ()->process;
+  p->loaded = success;
+
   /* If load failed, quit. */
-  palloc_free_page (file_name);
   if (!success) 
   {
-    /* Set boolean to set exit status to ERROR in thread_set_priority. */
-    thread_current ()->process->success = false;
+    palloc_free_page (file_name);
+    p->exit_status = ERROR_CODE;
+    
+    sema_up (&p->load_sema);
     thread_exit ();
   }
 
@@ -228,30 +232,34 @@ start_process (void *file_name_)
     /* Update argv to have the address of string being pushed to stack */
     argv[i] = (char *) if_.esp;
    }
-   free(args);
+  free(args);
 
-   /* Word alignment */
-   if_.esp -= ((int) if_.esp % sizeof (void *));
+  /* Word alignment */
+  if_.esp -= ((int) if_.esp % sizeof (void *));
 
-   /* Push null pointer sentinel to stack */
-   push_pointer_to_stack(&if_.esp, NULL);
+  /* Push null pointer sentinel to stack */
+  push_pointer_to_stack(&if_.esp, NULL);
 
-   /* Push address of each string to stack */
-   for (int i = argc - 1; i >= 0; i--)
-    {
-      push_pointer_to_stack(&if_.esp, argv[i]);
-    }
-    free(argv);
+  /* Push address of each string to stack */
+  for (int i = argc - 1; i >= 0; i--)
+  {
+    push_pointer_to_stack(&if_.esp, argv[i]);
+  }
+  free(argv);
 
-    /* Push argv to stack */
-    push_pointer_to_stack(&if_.esp, if_.esp);
+  /* Push argv to stack */
+  push_pointer_to_stack(&if_.esp, if_.esp);
 
-    /* Push argc to stack */
-    push_int_to_stack(&if_.esp, argc);
+  /* Push argc to stack */
+  push_int_to_stack(&if_.esp, argc);
 
-    /* Push a fake return adress */
-    push_pointer_to_stack(&if_.esp, NULL);
+  /* Push a fake return adress */
+  push_pointer_to_stack(&if_.esp, NULL);
 
+  sema_up (&p->load_sema);
+
+  /* If load failed, quit. */
+  palloc_free_page (file_name);
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -281,7 +289,7 @@ process_wait (tid_t child_tid)
   struct list *children = &calling_process->process->children;
   struct thread *child = NULL;
   for (struct list_elem *e = list_begin (children); e != list_end (children); 
-                                                    e = list_next (children))
+                                                    e = list_next (e))
   {
     child = list_entry (e, struct process, child_elem)->thread;
     /* Match corresponding child_tid to the child thread */
