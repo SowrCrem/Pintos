@@ -250,8 +250,8 @@ syscall_exec (const char *file)
 	/* Block parent process (cur) from running when child attempting to load executable */
 	sema_down (&parent->load_sema);
 
-	/* Check if loaded */
-	if (!child->loaded)
+	/* Check if child is loaded */
+	if (!parent->loaded)
 	{
 		return (pid_t) ERROR_CODE;
 	}

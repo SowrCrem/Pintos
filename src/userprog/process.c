@@ -210,10 +210,10 @@ start_process (void *file_name_)
 
   success = load (args[0], &if_.eip, &if_.esp);
 
+  /* Parent process if child process is loaded successfully or not */
   struct process *p = thread_current ()->process;
   p->loaded = success;
 
-  /* If load failed, quit. */
   if (!success) 
   {
     palloc_free_page (file_name);
