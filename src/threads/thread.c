@@ -102,10 +102,6 @@ thread_init (void)
   initial_thread->status = THREAD_RUNNING;
   initial_thread->tid = allocate_tid ();
 
-  #ifdef USERPROG
-    process_init (initial_thread, NULL);
-    printf(" Initialised thread_init process");
-  #endif
 
 }
 
@@ -114,6 +110,11 @@ thread_init (void)
 void
 thread_start (void) 
 {
+
+  #ifdef USERPROG
+    process_init (thread_current (), NULL);
+  #endif
+
   /* Create the idle thread. */
   struct semaphore idle_started;
   sema_init (&idle_started, 0);
@@ -204,6 +205,10 @@ thread_create (const char *name, int priority,
      Do this atomically so intermediate values for the 'stack' 
      member cannot be observed. */
   old_level = intr_disable ();
+
+  #ifdef USERPROG
+    process_init (t, thread_current ()->process);
+  #endif
 
   /* Stack frame for kernel_thread(). */
   kf = alloc_frame (t, sizeof *kf);
@@ -489,10 +494,7 @@ init_thread (struct thread *t, const char *name, int priority)
   t->magic = THREAD_MAGIC;
 
 
-  #ifdef USERPROG
-    process_init (t, thread_current ()->process);
-  #endif
-
+  
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
 
