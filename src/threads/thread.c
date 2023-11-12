@@ -98,12 +98,6 @@ thread_init (void)
   init_thread (initial_thread, "main", PRI_DEFAULT);
   initial_thread->status = THREAD_RUNNING;
   initial_thread->tid = allocate_tid ();
-
-  #ifdef USERPROG
-    rs_manager_init (initial_thread, NULL);
-    printf(" Initialised thread_init process");
-  #endif
-
 }
 
 /* Starts preemptive thread scheduling by enabling interrupts.
@@ -111,6 +105,11 @@ thread_init (void)
 void
 thread_start (void) 
 {
+  /* Initialise rs_manager for very first thread with no parent. */
+  #ifdef USERPROG
+    rs_manager_init (NULL, thread_current ());
+  #endif
+
   /* Create the idle thread. */
   struct semaphore idle_started;
   sema_init (&idle_started, 0);
@@ -216,6 +215,12 @@ thread_create (const char *name, int priority,
   sf = alloc_frame (t, sizeof *sf);
   sf->eip = switch_entry;
   sf->ebp = 0;
+
+  /* Add child T to parent process rs_manager, if T is user process. 
+     Current thread is parent and newly created thread is child. */
+  #ifdef USERPROG
+    rs_manager_init (thread_current ()->rs_manager, t);
+  #endif
 
   intr_set_level (old_level);
 
@@ -484,11 +489,6 @@ init_thread (struct thread *t, const char *name, int priority)
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
   t->magic = THREAD_MAGIC;
-
-  #ifdef USERPROG
-    /* */
-    rs_manager_init (t, thread_current ()->rs_manager);
-  #endif
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);

@@ -1,6 +1,4 @@
 #include "../userprog/syscall.h"
-#include <stdio.h>
-#include <syscall-nr.h>
 #include "../threads/interrupt.h"
 #include "../threads/thread.h"
 #include "../devices/shutdown.h"
@@ -8,12 +6,16 @@
 #include "../userprog/pagedir.h"
 #include "../threads/vaddr.h"
 #include "../lib/syscall-nr.h"
+#include <stdio.h>
+#include <syscall-nr.h>
 
 #define MAX_CONSOLE_FILE_SIZE 500		/* Maximum console file size. */
 
 #define SYS_MIN SYS_HALT  /* Minimum system call number. */
 #define SYS_MAX SYS_CLOSE /* Maximum system call number. */
 
+#define STDIN_FILENO 0
+#define STDOUT_FILENO 1
 
 /* Memory access functions. */
 static int get_user (const uint8_t *uaddr);
@@ -24,7 +26,6 @@ static bool put_user_safe (uint8_t *udst, uint8_t byte);
 static int32_t syscall_get_arg (struct intr_frame *if_, int arg_num);
 static bool syscall_invalid_arg (struct intr_frame *if_, int arg_num);
 static bool syscall_get_args (struct intr_frame *if_, int argc, char** argv);
-static void terminate_userprog (int status);
 
 /* System call functions. */
 static void syscall_halt (void);
@@ -41,11 +42,7 @@ static void syscall_seek (int fd, unsigned position);
 static unsigned syscall_tell (int fd);
 static void syscall_close (int fd);
 
-/* Call handler functions. */
 static void syscall_handler (struct intr_frame *);
-
-
-/* Memory access functions. */
 
 /* Reads a byte at user virtual address UADDR.
    UADDR must be below PHYS_BASE.
@@ -79,7 +76,7 @@ get_user_safe (const uint8_t *uaddr)
 {
 	if (is_user_vaddr (uaddr)) /* Checks if UADDR is below PHYS_BASE */
 		return get_user (uaddr);
-	return ERROR_CODE;
+	return ERROR;
 }
 
 /* Checks if UADDR is valid (Points below PHYS_BASE) and writes BYTE to it if it is.
@@ -102,8 +99,8 @@ get_user_word_safe (const uint8_t *uaddr)
 	{
 		int byte = get_user_safe (uaddr + i);
 
-		if (byte == ERROR_CODE)
-			return ERROR_CODE;
+		if (byte == ERROR)
+			return ERROR;
 
 		word |= byte << (BYTE_SIZE_BITS * i);
 	}
@@ -116,7 +113,7 @@ get_syscall_no (struct intr_frame *if_)
 {
 	int32_t syscall_no = get_user_word_safe ((uint8_t *) if_->esp);
 	if (syscall_no < SYS_MIN || syscall_no > SYS_MAX)
-		syscall_no = ERROR_CODE;
+		syscall_no = ERROR;
 	return syscall_no;
 }
 
@@ -126,7 +123,7 @@ get_argc (struct intr_frame *if_)
 {
 	int32_t argc = get_user_word_safe ((uint8_t *) if_->esp + WORD_SIZE);
 	if (argc < 0)
-		argc = ERROR_CODE;
+		argc = ERROR;
 	return argc;
 }
 
@@ -134,8 +131,9 @@ get_argc (struct intr_frame *if_)
 static int32_t
 syscall_get_arg (struct intr_frame *if_, int arg_num)
 {
-	int32_t arg = get_user_word_safe ((uint8_t *) if_->esp + (WORD_SIZE * (arg_num)));
-	printf("Argument: %d\n", arg);
+	int32_t arg = 
+		get_user_word_safe ((uint8_t *) if_->esp + (WORD_SIZE * (arg_num)));
+	printf("(syscall-get-arg) argument: %d\n", arg);
 	return arg;
 }
 
@@ -148,7 +146,7 @@ argv_get_arg (struct intr_frame *if_, int arg_num) {
 static bool
 syscall_invalid_arg (struct intr_frame *if_, int arg_num)
 {
-	return syscall_get_arg (if_, arg_num) == ERROR_CODE;
+	return syscall_get_arg (if_, arg_num) == ERROR;
 }
 
 /* Populates argv array. If at any point an argument is invalid 
@@ -156,88 +154,100 @@ syscall_invalid_arg (struct intr_frame *if_, int arg_num)
 static bool
 syscall_get_args (struct intr_frame *if_, int argc, char** argv)
 {
-	printf("Inside syscall_get_args\n");
+	printf("(syscall-get-args) entered\n");
 	for (int i = 0; i < argc; i++)
 	{
 		int32_t syscall_arg = syscall_get_arg (if_, i + 1);
-		printf("Syscall Arg: %d\n", syscall_arg);
-		if (syscall_arg == ERROR_CODE)
+		printf("(setup-argv) syscall arg: %d\n", syscall_arg);
+		if (syscall_arg == ERROR)
 			return false;
 		argv[i] = (char *) &syscall_arg;
 	}
 	return true;
 }
 
-/* System Call Functions */
+
+
 
 /* Terminates a user process with given status. */
 static void
 terminate_userprog (int status)
 {
-	struct thread *t = thread_current();
+	struct thread *cur = thread_current();
+
+	/* Send exit status to kernel. */
+	cur->rs_manager->exit_status = status;
 
 	/* Output termination message (only if it is not a kernel thread). */
-	printf ("%s: exit(%d)\n", t->name, status);
+	printf ("%s: exit(%d)\n", cur->name, status);
 
+	/* Terminate current process. */
 	thread_exit ();
 }
 
-
-/* Terminates by calling shutdown_power_off()
-   Seldom used because you lose information about possible deadlock situations. */
+/* Terminates by calling shutdown_power_off(). Seldom used because
+	 you lose information about possible deadlock situations. */
 static void
 syscall_halt (void)
 {
 	shutdown_power_off ();
 }
 
-/* Terminates the current user program, sending its exit status to the kernel.
-   Conventionally, a status of 0 indicates success and nonzero values indicate errors. */
+/* Terminates the current user program, sending its exit status to 
+   the kernel. Conventionally, a status of 0 indicates success and
+	 nonzero values indicate errors. */
 static void
 syscall_exit (int status)
 {
-	struct thread *cur = thread_current ();
-	/* Output termination message (only if it is not a kernel thread). */
-	printf ("%s: exit(%d)\n", cur->name, status); 
-
-	/* Send exit status to kernel */
-	cur->rs_manager->exit_status = status;
-
-	/* Terminate current process */
-	process_exit ();
+	terminate_userprog (status);
 }
 
-/* Runs the executable whose name is given in cmd line, passing any given arguments, and
-   returns the new process’s program id (pid). Must return pid -1, which otherwise should not
-   be a valid pid, if the program cannot load or run for any reason. */
+/* Runs the executable whose name is given in cmd line, passing any
+ 	 given arguments, and returns the new process’s program id (pid).
+	 Must return pid -1, which otherwise should not be a valid pid, if
+	 the program cannot load or run for any reason. */
 static pid_t
-syscall_exec (const char *file)
+syscall_exec (const char *cmd_line)
 {
-	/* TODO */
-	return 0;
+	tid_t tid = process_execute (cmd_line);
+
+	/* Find newly created child process and decrement child_load_sema. */
+  struct rs_manager *child_rs_manager = get_child (thread_current (), tid);
+  sema_down (&child_rs_manager->child_load_sema);
+
+  /* Continues (and returns) only after child process has loaded successfully
+     (or failed load). */
+
+	/* Return TID if child process loaded succesfully, else -1. */
+  if (child_rs_manager->load_success)
+    return tid;
+  else
+    return ERROR;
 }
 
 /* Waits for a child process pid and retrieves the child’s exit status. */
 static int
 syscall_wait (pid_t pid)
 {
-	/* TODO */
-	return 0;
+	return process_wait (pid);
 }
 
 /* Creates a new file called file initially initial size bytes in size. 
-	 Returns true if successful, false otherwise.
-	 Creating a new file does not open it: opening the new file is a separate operation
-	 which would require a open system call. */
+
+	 Returns true if successful, false otherwise. Creating a new file 
+	 does not open it: opening the new file is a separate operation which
+	 would require a open system call. */
 static bool
 syscall_create (const char *file, unsigned initial_size)
 {
 	return filesys_create (file, initial_size);
 }
 
-/* Deletes the file called file. Returns true if successful, false otherwise. 
-	 A file may be removed regardless of whether it is open or closed, and removing 
-	 an open file does not close it. */
+/* Deletes the file called file. 
+
+	 Returns true if successful, false otherwise. A file may be removed
+	 regardless of whether it is open or closed, and removing an open 
+	 file does not close it. */
 static bool
 syscall_remove (const char *file)
 {
@@ -303,7 +313,7 @@ syscall_close (int fd)
 
 /* Call Handler Functions */
 
-/* Array of function pointers for system calls for efficient function lookup. */
+/* Array used for system calls for efficient function lookup. */
 void *system_call_function[] = {
 		[SYS_HALT]     = (uint32_t (*)(void)) syscall_halt,
 		[SYS_EXIT]     = (uint32_t (*)(void)) syscall_exit,
@@ -344,7 +354,7 @@ syscall_init (void)
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
 }
 
-/* Retrieves argv for a given Interrupt Frame if_ */
+/* Retrieves argv for a given interrupt frame if_. */
 static void
 set_argv (struct intr_frame *if_, char** argv)
 {
@@ -353,24 +363,24 @@ set_argv (struct intr_frame *if_, char** argv)
 
 /* Sets up arguments ESP, SYSCALL_NO, ARGC, ARGV. */
 static void setup_argv (struct intr_frame *if_, int syscall_no, char **argv) {
-	printf("Inside function setup_argv\n");
+	printf("(setup-argv) entered\n");
 
 	set_argv(if_, argv);
 	int argc = get_argc(if_);
-	printf("argc is %d\n", argc);
+	printf("(setup-argv) argc is %d\n", argc);
 
-	printf("Still going\n");
+	printf("(setup-argv) still going\n");
 
-	if (!syscall_get_args(if_, argc, argv)) { /* Number of args not correct */
-		printf("Number of Arguments not correct\n");
-		terminate_userprog(ERROR_CODE);
+	/* Terminate user process if number of args is not correct. */
+	if (!syscall_get_args(if_, argc, argv)) {
+		printf("(setup-argv) naughty, incorrect number of args\n");
+		terminate_userprog (ERROR);
 	}
-	printf("Set up Args Successfully \n");
-	// TODO: print the argv array contents
-	printf("Argv Array Contents: \n");
-	for (int i=0; i<argc; i++)
-		printf("%s ", argv[i]);
-	printf("\n");
+	printf("(setup-argv) successfully setup argv \n");
+	// TODO: fix printing the argv array contents
+	printf("(setup-argv) argv contents: \n");
+	for (int i = 0; i < argc; i++)
+		printf("(setup-argv) arg %d is %s\n", i, argv[i]);
 }
 
 void
@@ -392,7 +402,7 @@ syscall_execute_function (uint32_t (*func_pointer)(), int argc, char** argv, uin
 			break;
 		default:
 			/* Error for invalid Number of Arguments */
-			process_exit();
+			thread_exit ();
 			break;
 	}
 }
@@ -400,41 +410,44 @@ syscall_execute_function (uint32_t (*func_pointer)(), int argc, char** argv, uin
 static void
 syscall_handler (struct intr_frame *if_)
 {
-	printf("Entered syscall handler\n");
+	printf("(syscall_handler) entered syscall handler\n");
 	int32_t syscall_no = get_syscall_no(if_);
-	printf("Syscall Number: %d\n", syscall_no);
+	printf("(syscall_handler) syscall number: %d\n", syscall_no);
 
-	/* Verification of user provided pointer happens within get_user_safe(), and dereferences. */
-	/* TODO: Remove pagedir check and modify page_fault() in exception.c to catch invalid user pointers */
-	if (syscall_no != ERROR_CODE && pagedir_get_page (thread_current ()->pagedir, if_->frame_pointer) != NULL)
+	/* Verification of user provided pointer happens within get_user_safe(), 
+		 and dereferences. */
+	/* TODO: Remove pagedir check and modify page_fault() in exception.c to
+		 catch invalid user pointers */
+	if (syscall_no != ERROR && pagedir_get_page 
+								(thread_current ()->pagedir, if_->frame_pointer) != NULL)
 	{
 
 		/* De-reference frame pointer. */
 		if_->frame_pointer = (*(uint32_t *) if_->frame_pointer);
 
 		/* Initialise and setup arguments. */
-		printf("Setting up arguments\n");
-		int argc = get_argc(if_);
-		char **argv = (char**) malloc(sizeof(char*) * argc);
-		printf("Calling function setup_argv\n");
-		setup_argv(if_, &syscall_no, argv);
+		printf ("(syscall_handler) setting up arguments\n");
+		int argc = get_argc (if_);
+		char **argv = (char**) malloc (sizeof (char*) * argc);
+		printf ("(syscall_handler) calling function setup_argv\n");
+		setup_argv (if_, &syscall_no, argv);
 		uint32_t result;
 
 		/* Basic Syscall Handler */
 		void* (*func_pointer) () = system_call_function[syscall_no];
-		syscall_execute_function(func_pointer, argc, argv, &result);
+		syscall_execute_function (func_pointer, argc, argv, &result);
 
 		/* Store the Result in f->eax */
 		if_->eax = result;
 	}
 	else
 	{
-		terminate_userprog(ERROR_CODE);
+		terminate_userprog (ERROR);
 	}
 
 	/* Handler Finishes - Exit the current Thread */
-	printf("Ended Syscall Handler\n");
-	terminate_userprog(SUCCESS_CODE);
+	printf ("(syscall_handler) end of function.\n");
+	terminate_userprog (SUCCESS);
 
-	printf("Shouldn't Print\n");
+	printf ("(syscall_handler) SHOULD NOT REACH THIS POINT.\n");
 }
