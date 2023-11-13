@@ -18,29 +18,46 @@
 #define STDOUT_FILENO 1
 
 /* Memory access functions. */
-static int get_user (const uint8_t *uaddr);
-static bool put_user (uint8_t *udst, uint8_t byte);
-static int get_user_safe (const uint8_t *uaddr);
-static int32_t get_user_word_safe (const uint8_t *uaddr);
-static bool put_user_safe (uint8_t *udst, uint8_t byte);
-static int32_t syscall_get_arg (struct intr_frame *if_, int arg_num);
-static bool syscall_invalid_arg (struct intr_frame *if_, int arg_num);
-static bool syscall_get_args (struct intr_frame *if_, int argc, char** argv);
+static int     get_user            (const uint8_t *uaddr);
+static bool    put_user            (uint8_t *udst, uint8_t byte);
+static int     get_user_safe       (const uint8_t *uaddr);
+static int32_t get_user_word_safe  (const uint8_t *uaddr);
+static bool    put_user_safe       (uint8_t *udst, uint8_t byte);
+static int32_t syscall_get_arg     (struct intr_frame *if_, int arg_num);
+static bool    syscall_invalid_arg (struct intr_frame *if_, int arg_num);
+static bool    syscall_get_args    (struct intr_frame *if_, int argc, char** argv);
+/* terminate_userprog */
+static void    store_result        (uint32_t result_ptr, struct intr_frame *if_);
 
 /* System call functions. */
-static void syscall_halt (void);
-static void syscall_exit (int status);
-static pid_t syscall_exec (const char *file);
-static int syscall_wait (pid_t pid);
-static bool syscall_create (const char *file, unsigned initial_size);
-static bool syscall_remove (const char *file);
-static int syscall_open (const char *file);
-static int syscall_filesize (int fd);
-static int syscall_read (int fd, void *buffer, unsigned size);
-static int syscall_write (int fd, const void *buffer, unsigned size);
-static void syscall_seek (int fd, unsigned position);
-static unsigned syscall_tell (int fd);
-static void syscall_close (int fd);
+static void     halt     (void);
+static void     exit     (int status);
+static pid_t    exec     (const char *file);
+static int      wait     (pid_t pid);
+static bool     create   (const char *file, unsigned initial_size);
+static bool     remove   (const char *file);
+static int      open     (const char *file);
+static int      filesize (int fd);
+static int      read     (int fd, void *buffer, unsigned size);
+static int      write    (int fd, const void *buffer, unsigned size);
+static void     seek     (int fd, unsigned position);
+static unsigned tell     (int fd);
+static void     close    (int fd);
+
+/* System call helper functions */
+static void syscall_halt     (struct intr_frame *if_);
+static void syscall_exit     (struct intr_frame *if_);
+static void syscall_exec     (struct intr_frame *if_);
+static void syscall_wait     (struct intr_frame *if_);
+static void syscall_create   (struct intr_frame *if_);
+static void syscall_remove   (struct intr_frame *if_);
+static void syscall_open     (struct intr_frame *if_);
+static void syscall_filesize (struct intr_frame *if_);
+static void syscall_read     (struct intr_frame *if_);
+static void syscall_write    (struct intr_frame *if_);
+static void syscall_seek     (struct intr_frame *if_);
+static void syscall_tell     (struct intr_frame *if_);
+static void syscall_close    (struct intr_frame *if_);
 
 static void syscall_handler (struct intr_frame *);
 
@@ -162,9 +179,6 @@ syscall_get_args (struct intr_frame *if_, int argc, char** argv)
 	return true;
 }
 
-
-
-
 /* Terminates a user process with given status. */
 static void
 terminate_userprog (int status)
@@ -184,10 +198,21 @@ terminate_userprog (int status)
 	printf ("(terminate_userprog) should not reach this point\n");
 }
 
+static void
+store_result (uint32_t result_ptr, struct intr_frame *if_) {
+	/* De-Reference result_ptr and store it in if_eax */
+	/* TODO: Check if result_ptr is a valid address (is this needed?) */
+	if_->eax = *result_ptr;
+}
+
+
+/* Syscall Functions */
+/* TODO: Move to separate file i.e. syscall_func.c, syscall_func.h */
+
 /* Terminates by calling shutdown_power_off(). Seldom used because
 	 you lose information about possible deadlock situations. */
 static void
-syscall_halt (void)
+halt (void)
 {
 	// printf ("(halt) shutting down\n");
 	shutdown_power_off ();
@@ -198,7 +223,7 @@ syscall_halt (void)
    the kernel. Conventionally, a status of 0 indicates success and
 	 nonzero values indicate errors. */
 static void
-syscall_exit (int status)
+exit (int status)
 {
 	// printf ("(sycall_exit) running exit(%d)\n", status);
 	terminate_userprog (status);
@@ -209,7 +234,7 @@ syscall_exit (int status)
 	 Must return pid -1, which otherwise should not be a valid pid, if
 	 the program cannot load or run for any reason. */
 static pid_t
-syscall_exec (const char *cmd_line)
+exec (const char *cmd_line)
 {
 	tid_t tid = process_execute (cmd_line);
 
@@ -241,7 +266,7 @@ syscall_exec (const char *cmd_line)
 
 /* Waits for a child process pid and retrieves the child’s exit status. */
 static int
-syscall_wait (pid_t pid)
+wait (pid_t pid)
 {
 	return process_wait (pid);
 }
@@ -252,7 +277,7 @@ syscall_wait (pid_t pid)
 	 does not open it: opening the new file is a separate operation which
 	 would require a open system call. */
 static bool
-syscall_create (const char *file, unsigned initial_size)
+create (const char *file, unsigned initial_size)
 {
 	return filesys_create (file, initial_size);
 }
@@ -263,7 +288,7 @@ syscall_create (const char *file, unsigned initial_size)
 	 regardless of whether it is open or closed, and removing an open 
 	 file does not close it. */
 static bool
-syscall_remove (const char *file)
+remove (const char *file)
 {
 	if (file == NULL)
 		return false;
@@ -272,28 +297,28 @@ syscall_remove (const char *file)
 }
 
 static int
-syscall_open (const char *file)
+open (const char *file)
 {
 	/* TODO */
 	return 0;
 }
 
 static int
-syscall_filesize (int fd)
+filesize (int fd)
 {
 	/* TODO */
 	return 0;
 }
 
 static int
-syscall_read (int fd, void *buffer, unsigned size)
+read (int fd, void *buffer, unsigned size)
 {
 	/* TODO */
 	return 0;
 }
 
 static int
-syscall_write (int fd, const void *buffer, unsigned size)
+write (int fd, const void *buffer, unsigned size)
 {
 	if (!(size > MAX_CONSOLE_FILE_SIZE))
 	{
@@ -306,61 +331,185 @@ syscall_write (int fd, const void *buffer, unsigned size)
 }
 
 static void
-syscall_seek (int fd, unsigned position)
+seek (int fd, unsigned position)
 {
 	/* TODO */
 }
 
 static unsigned
-syscall_tell (int fd)
+tell (int fd)
 {
 	/* TODO */
 	return 0;
 }
 
 static void
-syscall_close (int fd)
+close (int fd)
 {
 	/* TODO */
 }
 
 
+/* Syscall Helper Functions */
+
+static void
+syscall_halt (UNUSED struct intr_frame *if_)
+{
+	halt ();
+}
+
+static void
+syscall_exit (UNUSED struct intr_frame *if_)
+{
+	int status;
+	exit (status);
+}
+
+static void
+syscall_exec (struct intr_frame *if_)
+{
+	/* TODO: Retrieve cmd_line from if_ or an argv array */
+	char *cmd_line;
+
+	/* Get result and store it in if_->eax */
+	pid_t result = exec (cmd_line);
+	store_result(&result, if_);
+}
+
+static void
+syscall_wait (struct intr_frame *if_)
+{
+	/* TODO: Retrieve pid from if_ or an argv array */
+	pid_t pid;
+
+	/* Get result and store it in if_->eax */
+	int result = wait (pid);
+	store_result(&result, if_);
+}
+
+static void
+syscall_create (struct intr_frame *if_)
+{
+	/* TODO: Retrieve file, initial_size from if_ or an argv array */
+	char *file;
+	unsigned initial_size;
+
+	/* Get result and store it in if_->eax */
+	bool result = create (file, initial_size);
+	store_result(&result, if_);
+}
+
+static void
+syscall_remove (struct intr_frame *if_)
+{
+	/* TODO: Retrieve file from if_ or an argv array */
+	char *file;
+
+	/* Get result and store it in if_->eax */
+	int result = remove (file);
+	store_result(&result, if_);
+}
+
+static void
+syscall_open (struct intr_frame *if_)
+{
+	/* TODO: Retrieve file from if_ or an argv array */
+	char *file;
+
+	/* Get result and store it in if_->eax */
+	int result = open (file);
+	store_result(&result, if_);
+}
+
+static void
+syscall_filesize (struct intr_frame *if_)
+{
+	/* TODO: Retrieve fd from if_ or an argv array */
+	int fd;
+
+	/* Get result and store it in if_->eax */
+	int result = filesize (fd);
+	store_result(&result, if_);
+}
+
+static void
+syscall_read (struct intr_frame *if_)
+{
+	/* TODO: Retrieve fd, buffer, size from if_ or an argv array */
+	int fd;
+	void *buffer;
+	unsigned size;
+
+	/* Get result and store it in if_->eax */
+	int result = read (fd, buffer, size);
+	store_result(&result, if_);
+}
+
+static void
+syscall_write (struct intr_frame *if_)
+{
+	/* TODO: Retrieve fd, buffer, size from if_ or an argv array */
+	int fd;
+	void *buffer;
+	unsigned size;
+
+	/* Get result and store it in if_->eax */
+	int result = write (fd, buffer, size);
+	store_result(&result, if_);
+}
+
+static void
+syscall_seek (UNUSED struct intr_frame *if_)
+{
+	/* TODO: Retrieve fd, buffer, size from if_ or an argv array */
+	int fd;
+	unsigned position;
+
+	/* Execute seek syscall with arguments */
+	seek (fd, position);
+}
+
+static void
+syscall_tell (struct intr_frame *if_)
+{
+	/* TODO: Retrieve fd, buffer, size from if_ or an argv array */
+	int fd;
+
+	/* Get result and store it in if_->eax */
+	unsigned result = tell (fd);
+	store_result(&result, if_);
+}
+
+static void
+syscall_close (UNUSED struct intr_frame *if_)
+{
+	/* TODO: Retrieve fd, buffer, size from if_ or an argv array */
+	int fd;
+
+	/* Execute close syscall with arguments */
+	close (fd);
+}
+
+
 /* Call Handler Functions */
 
-/* Array used for system calls for efficient function lookup. */
+/* Array used to lookup system call functions */
 void *system_call_function[] = {
-		[SYS_HALT]     = (uint32_t (*)(void)) syscall_halt,
-		[SYS_EXIT]     = (uint32_t (*)(void)) syscall_exit,
-		[SYS_EXEC]     = (uint32_t (*)(void)) syscall_exec,
-		[SYS_WAIT]     = (uint32_t (*)(void)) syscall_wait,
-		[SYS_CREATE]   = (uint32_t (*)(void)) syscall_create,
-		[SYS_REMOVE]   = (uint32_t (*)(void)) syscall_remove,
-		[SYS_OPEN]     = (uint32_t (*)(void)) syscall_open,
-		[SYS_FILESIZE] = (uint32_t (*)(void)) syscall_filesize,
-		[SYS_READ]     = (uint32_t (*)(void)) syscall_read,
-		[SYS_WRITE]    = (uint32_t (*)(void)) syscall_write,
-		[SYS_SEEK]     = (uint32_t (*)(void)) syscall_seek,
-		[SYS_TELL]     = (uint32_t (*)(void)) syscall_tell,
-		[SYS_CLOSE]    = (uint32_t (*)(void)) syscall_close,
+		[SYS_HALT]     = syscall_halt,
+		[SYS_EXIT]     = syscall_exit,
+		[SYS_EXEC]     = syscall_exec,
+		[SYS_WAIT]     = syscall_wait,
+		[SYS_CREATE]   = syscall_create,
+		[SYS_REMOVE]   = syscall_remove,
+		[SYS_OPEN]     = syscall_open,
+		[SYS_FILESIZE] = syscall_filesize,
+		[SYS_READ]     = syscall_read,
+		[SYS_WRITE]    = syscall_write,
+		[SYS_SEEK]     = syscall_seek,
+		[SYS_TELL]     = syscall_tell,
+		[SYS_CLOSE]    = syscall_close,
 };
 
-/* Number of arguments for each system call. */
-static int syscall_expected_argcs[] =
-{
-		[SYS_HALT]     = 0,
-		[SYS_EXIT]     = 1,
-		[SYS_EXEC]     = 1,
-		[SYS_WAIT]     = 1,
-		[SYS_CREATE]   = 2,
-		[SYS_REMOVE]   = 1,
-		[SYS_OPEN]     = 1,
-		[SYS_FILESIZE] = 1,
-		[SYS_READ]     = 3,
-		[SYS_WRITE]    = 3,
-		[SYS_SEEK]     = 2,
-		[SYS_TELL]     = 1,
-		[SYS_CLOSE]    = 1
-};
 
 void
 syscall_init (void) 
@@ -368,62 +517,34 @@ syscall_init (void)
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
 }
 
-
 void
-syscall_execute_function (uint32_t (*func_pointer)(), int no_args, struct intr_frame *if_, uint32_t* result)
+syscall_execute_function (int32_t syscall_no, int no_args, struct intr_frame *if_)
 {
-	/* Each case calls the specific function for the specified syscall */
-	switch (no_args) {
-		case 0:
-			*result = func_pointer ();
-			break;
-		case 1:
-			*result = func_pointer (syscall_get_arg(if_, 1));
-			break;
-		case 2:
-			*result = func_pointer (syscall_get_arg(if_, 1), syscall_get_arg(if_, 2));
-			break;
-		case 3:
-			*result = func_pointer (syscall_get_arg(if_, 1), syscall_get_arg(if_, 2), syscall_get_arg(if_, 3));
-			break;
-		default:
-			/* Error for invalid Number of Arguments */
-			thread_exit ();
-			break;
+	if (no_args < 0 || no_args > 3)
+	{
+		terminate_userprog(ERROR);
 	}
+	void* (*func_pointer) (struct intr_frame *if_) = system_call_function[syscall_no];
+	func_pointer (if_);
 }
 
 static void
 syscall_handler (struct intr_frame *if_)
 {
 	int32_t syscall_no = get_syscall_no(if_);
-	
-	int expected_args = syscall_expected_argcs[syscall_no];
-	// printf ("(syscall_handler) syscall num: %d; expected args: %d\n", 
-	// 				(int) syscall_no, expected_args);
+	/* printf ("(syscall_handler) syscall num: %d", syscall_no); */
+	/* Verification of user provided pointer happens within get_user_safe(), and dereferences. */
 
-	/* Verification of user provided pointer happens within get_user_safe(), 
-		 and dereferences. */
-	/* TODO: Remove pagedir check and modify page_fault() in exception.c to
-		 catch invalid user pointers */
-	if (syscall_no != ERROR && pagedir_get_page 
-								(thread_current ()->pagedir, if_->frame_pointer) != NULL)
+	/* TODO: Remove page-dir check and modify page_fault() in exception.c to catch invalid user pointers */
+	void *page = pagedir_get_page (thread_current ()->pagedir, if_->frame_pointer)
+
+	if (syscall_no != ERROR && page != NULL)
 	{
-
 		/* De-reference frame pointer. */
 		if_->frame_pointer = (*(uint32_t *) if_->frame_pointer);
 
-		/* Initialise and setup arguments. */
-		// printf ("(syscall_handler) setting up arguments\n");
-
-		uint32_t result;
-
-		/* Basic Syscall Handler */
-		void* (*func_pointer) () = system_call_function[syscall_no];
-		syscall_execute_function (func_pointer, expected_args, if_, &result);
-
-		/* Store the Result in f->eax */
-		if_->eax = result;
+		/* Execute Syscall */
+		syscall_execute_function (syscall_no, expected_args, if_);
 	}
 	else
 	{
@@ -431,7 +552,5 @@ syscall_handler (struct intr_frame *if_)
 	}
 
 	/* Handler Finishes - Exit the current Thread */
-	// printf ("(syscall_handler) end of function for %s\n", 
-	// 				thread_current ()->name);
-
+	/* printf ("(syscall_handler) end of function for %s\n",	thread_current ()->name); */
 }
