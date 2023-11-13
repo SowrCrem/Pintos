@@ -81,10 +81,16 @@ process_init (struct thread *t, struct process *parent)
   p->thread = t;
   p->exit_status = NOT_EXITED;
   sema_init (&p->wait_sema, 0);
+
   list_init (&p->children);
 
-  p->parent_process = parent;
+  sema_init (&p->load_sema, 0);
 
+  hash_init (p->file_table, NULL, NULL, NULL);
+  p->fd_current = 2;
+  /* Implement hash hash function and hash less function */
+
+  p->parent_process = parent;
   /* Add process to parent process's list*/
   list_push_back (&parent->children, &p->child_elem);
 
@@ -705,5 +711,3 @@ install_page (void *upage, void *kpage, bool writable)
           && pagedir_set_page (t->pagedir, upage, kpage, writable));
 }
 
-
-/* Helper functions for Hash Table */
