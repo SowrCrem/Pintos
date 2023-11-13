@@ -107,9 +107,11 @@ process_execute (const char *file_name)
 static void 
 push_string_to_stack(void **esp, char *s)
 {
+  printf("In push_string_to_stack\n");
   int len = strlen(s) + 1;
   *esp -= len;
   strlcpy(*esp, s, len);
+  //*((char *) *esp) = s;
 }
 
 /* Push an int x onto the stack at esp */
@@ -146,6 +148,7 @@ start_process (void *file_name_)
 
 	/* Set up argc and args, argv arrays, update interrupt frame */
   int argc = get_no_args(file_name_); /* Number of arguments */
+  printf("Number of args in start_process : %d\n", argc);
   char **args = (char**) malloc(sizeof(char*) * argc);  /* List of string arguments */
   char **argv = (char**) malloc(sizeof(char*) * argc);  /* List of addresses of each string */
 	parse_arguments(file_name, args, argc);
@@ -153,13 +156,14 @@ start_process (void *file_name_)
   success = load (args[0], &if_.eip, &if_.esp);
 
   /* If load failed, quit. */
-  palloc_free_page (file_name);
+  //palloc_free_page (file_name);
   if (!success) 
     thread_exit ();
 
   /* Push words to top of stack */
   for (int i = argc - 1; i >= 0; i--) 
    {
+    printf("String being pushed : %s\n", args[i]);
     push_string_to_stack(&if_.esp, args[i]);
     free(args[i]);
 
@@ -169,7 +173,7 @@ start_process (void *file_name_)
    free(args);
 
    /* Word alignment */
-   if_.esp -= ((int) if_.esp % sizeof (void *));
+   if_.esp -= ((int) if_.esp) % sizeof (void *);
 
    /* Push null pointer sentinel to stack */
    push_pointer_to_stack(&if_.esp, NULL);
@@ -189,6 +193,8 @@ start_process (void *file_name_)
 
     /* Push a fake return adress */
     push_pointer_to_stack(&if_.esp, NULL);
+
+    palloc_free_page(file_name);
 
 
   /* Start the user process by simulating a return from an
@@ -580,7 +586,7 @@ setup_stack (void **esp)
       if (success)
 			{
 				/* Temporarily set up stack to avoid immediate page fault */
-				*esp = PHYS_BASE - 12;
+				*esp = PHYS_BASE;
 				/* TODO: Remove */
 			}
       else

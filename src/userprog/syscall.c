@@ -36,7 +36,7 @@ static bool syscall_remove (const char *file);
 static int syscall_open (const char *file);
 static int syscall_filesize (int fd);
 static int syscall_read (int fd, void *buffer, unsigned size);
-static int syscall_write (int fd, const void *buffer, unsigned size);
+static int syscall_write (int fd, const char *buffer, unsigned size);
 static void syscall_seek (int fd, unsigned position);
 static unsigned syscall_tell (int fd);
 static void syscall_close (int fd);
@@ -253,13 +253,20 @@ syscall_read (int fd, void *buffer, unsigned size)
 }
 
 static int
-syscall_write (int fd, const void *buffer, unsigned size)
+syscall_write (int fd, const char *buffer, unsigned size)
 {
+	printf("Inside syscall_write function\n");
+	// int fd = syscall_get_arg(if_, 1);
+	// printf("fd value : %d\n", fd);
+	// const char *buffer = (char *) syscall_get_arg(if_, 2);
+	// //printf("buffer string value: %s\n", (char *)buffer);
+	// unsigned size = syscall_get_arg(if_, 3);
+
 	if (!(size > MAX_CONSOLE_FILE_SIZE))
 	{
 		if (fd == STDOUT_FILENO)
 		{
-			putbuf((char*) buffer, size);
+			putbuf(buffer, size);
 		}
 	}
 	return 0;
@@ -358,7 +365,7 @@ static void setup_argv (struct intr_frame *if_, int syscall_no, char **argv) {
 }
 
 void
-syscall_execute_function (uint32_t (*func_pointer)(), int argc, char** argv, uint32_t* result)
+syscall_execute_function (uint32_t (*func_pointer)(), int argc, struct intr_frame *if_, uint32_t* result)
 {
 	/* Each case calls the specific function for the specified syscall */
 	switch (argc) {
@@ -366,13 +373,13 @@ syscall_execute_function (uint32_t (*func_pointer)(), int argc, char** argv, uin
 			result = func_pointer ();
 			break;
 		case 1:
-			result = func_pointer (argv[0]);
+			result = func_pointer (syscall_get_arg(if_, 1));
 			break;
 		case 2:
-			result = func_pointer (argv[0], argv[1]);
+			result = func_pointer (syscall_get_arg(if_, 1), syscall_get_arg(if_, 2));
 			break;
 		case 3:
-			result = func_pointer (argv[0], argv[1], argv[2]);
+			result = func_pointer (syscall_get_arg(if_, 1), syscall_get_arg(if_, 2), syscall_get_arg(if_, 3));
 			break;
 		default:
 			/* Error for invalid Number of Arguments */
@@ -385,8 +392,10 @@ static void
 syscall_handler (struct intr_frame *if_)
 {
 	printf("Entered syscall handler\n");
-	int32_t syscall_no = get_syscall_no(if_);
+	//int32_t syscall_no = get_syscall_no(if_);
+	int32_t syscall_no = syscall_get_arg(if_, 0);
 	printf("Syscall Number: %d\n", syscall_no);
+	int expected_args = syscall_expected_argcs[syscall_no];
 
 	/* Verification of user provided pointer happens within get_user_safe(), and dereferences. */
 	/* TODO: Remove pagedir check and modify page_fault() in exception.c to catch invalid user pointers */
@@ -397,16 +406,18 @@ syscall_handler (struct intr_frame *if_)
 		if_->frame_pointer = (*(uint32_t *) if_->frame_pointer);
 
 		/* Initialise and setup arguments. */
-		printf("Setting up arguments\n");
-		int argc = get_argc(if_);
-		char **argv = (char**) malloc(sizeof(char*) * argc);
-		printf("Calling function setup_argv\n");
-		setup_argv(if_, &syscall_no, argv);
+		//printf("Setting up arguments\n");
+		//int argc = get_argc(if_);
+		//char **argv = (char**) malloc(sizeof(char*) * argc);
+		//printf("Calling function setup_argv\n");
+		//setup_argv(if_, &syscall_no, argv);
 		uint32_t result;
 
 		/* Basic Syscall Handler */
 		void* (*func_pointer) () = system_call_function[syscall_no];
-		syscall_execute_function(func_pointer, argc, argv, &result);
+		/* pass in interrupt frame to correct function so that correct arguments can be accessed within function */
+		syscall_execute_function(func_pointer, expected_args, if_, &result);
+
 
 		/* Store the Result in f->eax */
 		if_->eax = result;
