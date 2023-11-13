@@ -10,6 +10,7 @@
 /* Wasn't compiling withoßut this typedef from thread.h */
 typedef int tid_t;
 
+#define USERPROG 1; /* TODO: REMOVE */
 
 /* Global variable for filesystem lock */
 struct lock filesys_lock;
@@ -49,7 +50,7 @@ struct process
 
     struct hash *file_table;                /* Hash Table for mapping files owned by process to fd */
 
-    int *fd_current;                        /* Current fd value of (executable?)*/
+    int fd_current;                        /* Current fd value of (executable?)*/
     /* TODO: Check comment of fd_current */
 };
 

@@ -346,7 +346,8 @@ syscall_filesize (int fd)
 	struct process *p = thread_current ()->process;
 	
 	/* Retrieve fd value from file */
-	hash_find ()
+	
+	/* Call file _length for the file and return the value */
 }
 
 static int
@@ -372,18 +373,26 @@ syscall_write (int fd, const void *buffer, unsigned size)
 static void
 syscall_seek (int fd, unsigned position)
 {
-	/* TODO */
+	/* Retrieve fd value from file */
+	struct file *file = get_file_entry (fd);
+	
+	/* Call file_seek for the file and return the value */
+	file_seek (file, (off_t) position);
 }
 
 static unsigned
 syscall_tell (int fd)
 {
-	/* TODO */
-	return 0;
+	/* Retrieve fd value from file */
+	struct file *file = get_file_entry (fd);
+	
+	/* Call file_tell for the file and return the value */
+	file_tell (file);
 }
 
-static void
-syscall_close (int fd)
+/* Helper function to return file_entry for corresponding fd*/
+struct file_entry *
+get_file_entry (int fd)
 {
 	struct process *p = thread_current ()->process;
 
@@ -396,19 +405,27 @@ syscall_close (int fd)
 	
 	struct file_entry *file_entry = hash_entry (elem, struct file_entry, hash_elem);
 
+	return file_entry;
+
+}
+
+static void
+syscall_close (int fd)
+{
+	struct process *p = thread_current ()->process;
+	struct file_entry *file_entry = get_file_entry (fd);
 
 	/* Call file_close on file */
 	file_close (file_entry->file);
 
 	/* Remove entry from table */
-	hash_delete (table, elem);
+	hash_delete (p->file_table, &file_entry->hash_elem);
 
 	/* Decrement fd_current - maybe not necessary */
 
 
 	/* Free entry cause malloced */
 	free (file_entry);
-
 
 }
 
