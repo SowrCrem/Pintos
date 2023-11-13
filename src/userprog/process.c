@@ -277,7 +277,7 @@ void process_init (struct thread *t, struct process *parent)
 
   p->thread = t;
 
-  p->parent_process = thread_current ()->process;
+  p->parent_process = parent;
   list_init (&p->children);
   
   sema_init (&p->load_sema, 0);
