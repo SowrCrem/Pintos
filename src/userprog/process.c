@@ -234,8 +234,39 @@ process_wait (tid_t child_tid)
   struct process *child_process = child->process;
   sema_down (&child_process->exit_sema);
 
-  
+}
 
+void 
+process_free (struct process *p)
+{
+  /* Remove all the children from the list */
+  while (!list_empty (&p->children))
+  {
+    struct list_elem *e = list_pop_front (&p->children);
+    struct process *child_process = list_entry(e, struct process, child_elem);
+
+    if (child_process->exited)
+    {
+      /* If child thread is not terminated, free thread's process */
+      free (child_process);
+    }
+    else 
+    {
+      child_process->parent_process = NULL;
+    } 
+  }
+
+  /* If parent process is not terminated, make child process 
+     information available */
+  if (p->parent_process == NULL)
+  {
+    free (p);
+  }
+  else 
+  {
+    p->exited = true;
+    sema_up (&p->exit_sema);
+  }
 }
 
 /* Free the current process's resources. */
