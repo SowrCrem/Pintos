@@ -168,16 +168,16 @@ syscall_get_args (struct intr_frame *if_, int argc, char** argv)
 static void
 terminate_userprog (int status)
 {
-	struct thread *cur = thread_current();
+	// struct thread *cur = thread_current();
 
-	/* Send exit status to kernel. */
-	cur->rs_manager->exit_status = status;
+	// /* Send exit status to kernel. */
+	// cur->rs_manager->exit_status = status;
 
-	/* Output termination message (only if it is not a kernel thread). */
-	printf ("%s: exit(%d)\n", cur->name, status);
+	// /* Output termination message (only if it is not a kernel thread). */
+	// printf ("%s: exit(%d)\n", cur->name, status);
 
-	/* Terminate current process. */
-	thread_exit ();
+	// /* Terminate current process. */
+	// thread_exit ();
 }
 
 /* Terminates by calling shutdown_power_off(). Seldom used because
@@ -206,20 +206,21 @@ syscall_exit (int status)
 static pid_t
 syscall_exec (const char *cmd_line)
 {
-	tid_t tid = process_execute (cmd_line);
+// 	tid_t tid = process_execute (cmd_line);
 
-	/* Find newly created child process and decrement child_load_sema. */
-  struct rs_manager *child_rs_manager = get_child (thread_current (), tid);
-  sema_down (&child_rs_manager->child_load_sema);
+// 	/* Find newly created child process and decrement child_load_sema. */
+//   struct rs_manager *child_rs_manager = get_child (thread_current (), tid);
+//   sema_down (&child_rs_manager->child_load_sema);
 
-  /* Continues (and returns) only after child process has loaded successfully
-     (or failed load). */
+//   /* Continues (and returns) only after child process has loaded successfully
+//      (or failed load). */
 
-	/* Return TID if child process loaded succesfully, else -1. */
-  if (child_rs_manager->load_success)
-    return tid;
-  else
-    return ERROR;
+// 	/* Return TID if child process loaded succesfully, else -1. */
+//   if (child_rs_manager->load_success)
+//     return tid;
+//   else
+//     return ERROR;
+return 0;
 }
 
 /* Waits for a child process pid and retrieves the child’s exit status. */

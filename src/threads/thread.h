@@ -6,7 +6,6 @@
 #include <stdint.h>
 #include "../userprog/process.h"
 
-#define USERPROG 1      /* TODO: For testing purposes - ask UTA */
 
 /* States in a thread's life cycle. */
 enum thread_status
