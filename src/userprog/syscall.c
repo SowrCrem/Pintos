@@ -133,7 +133,7 @@ static int32_t
 syscall_get_arg (struct intr_frame *if_, int arg_num)
 {
 	int32_t arg = get_user_word_safe ((uint8_t *) if_->esp + (WORD_SIZE * (arg_num)));
-	printf("Argument: %d\n", arg);
+	//printf("Argument: %d\n", arg);
 	return arg;
 }
 
@@ -255,7 +255,7 @@ syscall_read (int fd, void *buffer, unsigned size)
 static int
 syscall_write (int fd, const char *buffer, unsigned size)
 {
-	printf("Inside syscall_write function\n");
+	//printf("Inside syscall_write function\n");
 	// int fd = syscall_get_arg(if_, 1);
 	// printf("fd value : %d\n", fd);
 	// const char *buffer = (char *) syscall_get_arg(if_, 2);
@@ -391,10 +391,10 @@ syscall_execute_function (uint32_t (*func_pointer)(), int argc, struct intr_fram
 static void
 syscall_handler (struct intr_frame *if_)
 {
-	printf("Entered syscall handler\n");
+	//printf("Entered syscall handler\n");
 	//int32_t syscall_no = get_syscall_no(if_);
 	int32_t syscall_no = syscall_get_arg(if_, 0);
-	printf("Syscall Number: %d\n", syscall_no);
+	//printf("Syscall Number: %d\n", syscall_no);
 	int expected_args = syscall_expected_argcs[syscall_no];
 
 	/* Verification of user provided pointer happens within get_user_safe(), and dereferences. */
@@ -428,8 +428,8 @@ syscall_handler (struct intr_frame *if_)
 	}
 
 	/* Handler Finishes - Exit the current Thread */
-	printf("Ended Syscall Handler\n");
-	terminate_userprog(SUCCESS_CODE);
+	//printf("Ended Syscall Handler\n");
+	//terminate_userprog(SUCCESS_CODE);
 
-	printf("Shouldn't Print\n");
+	//printf("Shouldn't Print\n");
 }

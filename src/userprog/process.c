@@ -79,8 +79,8 @@ static void parse_arguments(const char *command_line, char **args, int argc)
 tid_t
 process_execute (const char *file_name) 
 {
-	printf("In process_execute function\n");
-	printf("File Name: %s\n", file_name);
+	//printf("In process_execute function\n");
+	//printf("File Name: %s\n", file_name);
 
   char *fn_copy;
   tid_t tid;
@@ -94,7 +94,7 @@ process_execute (const char *file_name)
 
   char* save_ptr;
   char* program_name = strtok_r(file_name, " ", &save_ptr);
-	printf("Program Name: %s\n", program_name);
+	//printf("Program Name: %s\n", program_name);
 
   /* Create a new thread to execute FILE_NAME. This is the first item in argv */
   tid = thread_create (program_name, PRI_DEFAULT, start_process, fn_copy);
@@ -107,7 +107,7 @@ process_execute (const char *file_name)
 static void 
 push_string_to_stack(void **esp, char *s)
 {
-  printf("In push_string_to_stack\n");
+  //printf("In push_string_to_stack\n");
   int len = strlen(s) + 1;
   *esp -= len;
   strlcpy(*esp, s, len);
@@ -135,7 +135,7 @@ push_pointer_to_stack(void **esp, void *ptr)
 static void
 start_process (void *file_name_)
 {
-	printf("In start_process function\n");
+	//printf("In start_process function\n");
   char *file_name = file_name_;
   struct intr_frame if_;
   bool success;
@@ -148,7 +148,7 @@ start_process (void *file_name_)
 
 	/* Set up argc and args, argv arrays, update interrupt frame */
   int argc = get_no_args(file_name_); /* Number of arguments */
-  printf("Number of args in start_process : %d\n", argc);
+  //printf("Number of args in start_process : %d\n", argc);
   char **args = (char**) malloc(sizeof(char*) * argc);  /* List of string arguments */
   char **argv = (char**) malloc(sizeof(char*) * argc);  /* List of addresses of each string */
 	parse_arguments(file_name, args, argc);
@@ -163,7 +163,7 @@ start_process (void *file_name_)
   /* Push words to top of stack */
   for (int i = argc - 1; i >= 0; i--) 
    {
-    printf("String being pushed : %s\n", args[i]);
+    //printf("String being pushed : %s\n", args[i]);
     push_string_to_stack(&if_.esp, args[i]);
     free(args[i]);
 
