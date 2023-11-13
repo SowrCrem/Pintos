@@ -5,6 +5,7 @@
 #include "threads/synch.h"
 #include <debug.h>
 #include <list.h>
+#include <hash.h>
 
 /* Wasn't compiling withoßut this typedef from thread.h */
 typedef int tid_t;
@@ -22,6 +23,13 @@ struct lock filesys_lock;
 #define SUCCESS_CODE (0)                /* Success code. */
 #define ERROR_CODE (-1)                 /* Error code. */
 
+/* File Entry for Hash Table */
+struct file_entry 
+{
+    struct hash_elem hash_elem;         /* Hash Elem for input into Hash Table */
+    int fd;                             /* Integer fd (file descriptors) */
+    struct file *file;                  /* Struct file */
+};
 
 /* Process Struct */
 struct process 
@@ -38,6 +46,8 @@ struct process
     bool success;                           /* Boolean for THREAD exit status. */
     int exit_status;                        /* Exit status of THREAD. */
     struct semaphore wait_sema;             /* Semaphore for waiting on THREAD. */
+
+    struct hash *file_table;                /* Hash Table for mapping files owned by process to fd */
 };
 
 

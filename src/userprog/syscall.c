@@ -303,6 +303,17 @@ syscall_open (const char *file)
 {
 	/* TODO */
 	return 0;
+
+	/* Process that opened this file */
+	struct process *p = thread_current ()->process;
+
+	/* Check validity of file name */
+	if (file == NULL)
+	{
+		return ERROR_CODE;
+	}
+
+	/* Add file and corresponding fd to process's hash table */
 }
 
 static int
