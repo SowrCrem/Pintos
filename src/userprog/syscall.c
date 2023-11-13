@@ -301,8 +301,6 @@ syscall_remove (const char *file)
 static int
 syscall_open (const char *file)
 {
-	/* TODO */
-	return 0;
 
 	/* Process that opened this file */
 	struct process *p = thread_current ()->process;
@@ -324,7 +322,7 @@ syscall_open (const char *file)
 	}
 
 	/* Find fd */
-	int fd = &p->fd_current; 
+	int fd = p->fd_current; 
 
 	/* Dynamically allocate the file entry */
 	struct file_entry *entry = malloc (sizeof (struct file_entry));
@@ -338,13 +336,17 @@ syscall_open (const char *file)
 	/* Insert the file entry into the process's table */
 	hash_insert (p->file_table, &entry->hash_elem);
 
+	return fd;
+
 }
 
 static int
 syscall_filesize (int fd)
 {
-	/* TODO */
-	return 0;
+	struct process *p = thread_current ()->process;
+	
+	/* Retrieve fd value from file */
+	hash_find ()
 }
 
 static int
@@ -383,7 +385,31 @@ syscall_tell (int fd)
 static void
 syscall_close (int fd)
 {
-	/* TODO */
+	struct process *p = thread_current ()->process;
+
+	/* Get file from fd value */
+	struct file_entry *target_entry;
+	target_entry->fd = fd;
+
+	struct hash *table = p->file_table;
+	struct hash_elem *elem = hash_find (table, &target_entry->hash_elem);
+	
+	struct file_entry *file_entry = hash_entry (elem, struct file_entry, hash_elem);
+
+
+	/* Call file_close on file */
+	file_close (file_entry->file);
+
+	/* Remove entry from table */
+	hash_delete (table, elem);
+
+	/* Decrement fd_current - maybe not necessary */
+
+
+	/* Free entry cause malloced */
+	free (file_entry);
+
+
 }
 
 
