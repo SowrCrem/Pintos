@@ -151,7 +151,7 @@ rs_manager_free (struct rs_manager *rs)
    
    Returns NULL if not found. */
 struct rs_manager*
-get_child (struct thread *parent, tid_t tid)
+get_child (struct thread *parent, tid_t child_tid)
 {
   struct list *children = &parent->rs_manager->children;
   struct rs_manager *child_rs_manager = NULL;
@@ -160,7 +160,7 @@ get_child (struct thread *parent, tid_t tid)
   {
     child_rs_manager = list_entry (e, struct rs_manager, child_elem);
     /* Match corresponding tid to the child thread */
-    if (child_rs_manager->thread->tid == tid)
+    if (child_rs_manager->thread->tid == child_tid)
       break;
     child_rs_manager = NULL;
   }

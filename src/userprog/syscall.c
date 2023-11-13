@@ -190,7 +190,9 @@ terminate_userprog (int status)
 static void
 syscall_halt (void)
 {
+	printf ("(halt) shutting down\n");
 	shutdown_power_off ();
+	printf ("(halt) shouldn't print\n");
 }
 
 /* Terminates the current user program, sending its exit status to 
@@ -384,7 +386,7 @@ static void setup_argv (struct intr_frame *if_, int syscall_no, char **argv) {
 }
 
 void
-syscall_execute_function (uint32_t (*func_pointer)(), int argc, char** argv, uint32_t* result)
+	syscall_execute_function (uint32_t (*func_pointer)(), int argc, char** argv, uint32_t* result)
 {
 	/* Each case calls the specific function for the specified syscall */
 	switch (argc) {
