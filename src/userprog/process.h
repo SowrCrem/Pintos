@@ -48,6 +48,9 @@ struct process
     struct semaphore wait_sema;             /* Semaphore for waiting on THREAD. */
 
     struct hash *file_table;                /* Hash Table for mapping files owned by process to fd */
+
+    int *fd_current;                        /* Current fd value of (executable?)*/
+    /* TODO: Check comment of fd_current */
 };
 
 

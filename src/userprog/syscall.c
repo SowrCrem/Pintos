@@ -314,6 +314,30 @@ syscall_open (const char *file)
 	}
 
 	/* Add file and corresponding fd to process's hash table */
+
+	/* Open file */
+	struct file *file = filesys_open (file);
+	/* Check validity of open file */
+	if (file == NULL)
+	{
+		return ERROR_CODE;
+	}
+
+	/* Find fd */
+	int fd = &p->fd_current; 
+
+	/* Dynamically allocate the file entry */
+	struct file_entry *entry = malloc (sizeof (struct file_entry));
+
+	entry->file = file;
+	entry->fd   = fd;
+
+	/* Increment fd current pointer in process */
+	p->fd_current = fd++;
+
+	/* Insert the file entry into the process's table */
+	hash_insert (p->file_table, &entry->hash_elem);
+
 }
 
 static int
