@@ -137,11 +137,6 @@ syscall_get_arg (struct intr_frame *if_, int arg_num)
 	return arg;
 }
 
-static char*
-argv_get_arg (struct intr_frame *if_, int arg_num) {
-	// TODO
-}
-
 /* Checks if if_ contains an argument at arg_num */
 static bool
 syscall_invalid_arg (struct intr_frame *if_, int arg_num)
@@ -356,51 +351,23 @@ syscall_init (void)
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
 }
 
-/* Retrieves argv for a given interrupt frame if_. */
-static void
-set_argv (struct intr_frame *if_, char** argv)
-{
-	argv = syscall_get_arg(if_, 2);
-}
-
-/* Sets up arguments ESP, SYSCALL_NO, ARGC, ARGV. */
-static void setup_argv (struct intr_frame *if_, int syscall_no, char **argv) {
-	printf("(setup-argv) entered\n");
-
-	set_argv(if_, argv);
-	int argc = get_argc(if_);
-	printf("(setup-argv) argc is %d\n", argc);
-
-	printf("(setup-argv) still going\n");
-
-	/* Terminate user process if number of args is not correct. */
-	if (!syscall_get_args(if_, argc, argv)) {
-		printf("(setup-argv) naughty, incorrect number of args\n");
-		terminate_userprog (ERROR);
-	}
-	printf("(setup-argv) successfully setup argv \n");
-	// TODO: fix printing the argv array contents
-	printf("(setup-argv) argv contents: \n");
-	for (int i = 0; i < argc; i++)
-		printf("(setup-argv) arg %d is %s\n", i, argv[i]);
-}
 
 void
-	syscall_execute_function (uint32_t (*func_pointer)(), int argc, char** argv, uint32_t* result)
+	syscall_execute_function (uint32_t (*func_pointer)(), int no_args, struct intr_frame *if_, uint32_t* result)
 {
 	/* Each case calls the specific function for the specified syscall */
-	switch (argc) {
+	switch (no_args) {
 		case 0:
 			result = func_pointer ();
 			break;
 		case 1:
-			result = func_pointer (argv[0]);
+			result = func_pointer (syscall_get_arg(if_, 1));
 			break;
 		case 2:
-			result = func_pointer (argv[0], argv[1]);
+			result = func_pointer (syscall_get_arg(if_, 1), syscall_get_arg(if_, 2));
 			break;
 		case 3:
-			result = func_pointer (argv[0], argv[1], argv[2]);
+			result = func_pointer (syscall_get_arg(if_, 1), syscall_get_arg(if_, 2), syscall_get_arg(if_, 3));
 			break;
 		default:
 			/* Error for invalid Number of Arguments */
@@ -412,9 +379,9 @@ void
 static void
 syscall_handler (struct intr_frame *if_)
 {
-	printf("(syscall_handler) entered syscall handler\n");
 	int32_t syscall_no = get_syscall_no(if_);
-	printf("(syscall_handler) syscall number: %d\n", syscall_no);
+	
+	int expected_args = syscall_expected_argcs[syscall_no];
 
 	/* Verification of user provided pointer happens within get_user_safe(), 
 		 and dereferences. */
@@ -428,16 +395,13 @@ syscall_handler (struct intr_frame *if_)
 		if_->frame_pointer = (*(uint32_t *) if_->frame_pointer);
 
 		/* Initialise and setup arguments. */
-		printf ("(syscall_handler) setting up arguments\n");
-		int argc = get_argc (if_);
-		char **argv = (char**) malloc (sizeof (char*) * argc);
-		printf ("(syscall_handler) calling function setup_argv\n");
-		setup_argv (if_, &syscall_no, argv);
+		//printf ("(syscall_handler) setting up arguments\n");
+
 		uint32_t result;
 
 		/* Basic Syscall Handler */
 		void* (*func_pointer) () = system_call_function[syscall_no];
-		syscall_execute_function (func_pointer, argc, argv, &result);
+		syscall_execute_function (func_pointer, expected_args, if_, &result);
 
 		/* Store the Result in f->eax */
 		if_->eax = result;
@@ -448,8 +412,6 @@ syscall_handler (struct intr_frame *if_)
 	}
 
 	/* Handler Finishes - Exit the current Thread */
-	printf ("(syscall_handler) end of function.\n");
-	terminate_userprog (SUCCESS);
+	//printf ("(syscall_handler) end of function.\n");
 
-	printf ("(syscall_handler) SHOULD NOT REACH THIS POINT.\n");
 }
