@@ -423,7 +423,6 @@ syscall_close (int fd)
 
 	/* Decrement fd_current - maybe not necessary */
 
-
 	/* Free entry cause malloced */
 	free (file_entry);
 

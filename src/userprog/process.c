@@ -8,6 +8,7 @@
 #include "../userprog/gdt.h"
 #include "../userprog/pagedir.h"
 #include "../userprog/tss.h"
+#include "../userprog/syscall.h"
 #include "../filesys/directory.h"
 #include "../filesys/file.h"
 #include "../filesys/filesys.h"
@@ -17,6 +18,7 @@
 #include "../threads/palloc.h"
 #include "../threads/thread.h"
 #include "../threads/vaddr.h"
+
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
@@ -131,8 +133,16 @@ process_free (struct process *p)
     } 
   }
 
-  p->thread->process = NULL;
+  /* Remove all file entry from hash table */
+  int ptr = p->fd_current;
+  while (!hash_empty (p->file_table))
+  {
+    /* TODO: Can we call syscalls in process? */
+    syscall_close (ptr);
+    ptr--;
+  }
 
+  p->thread->process = NULL;
   free (p);
 }
 
