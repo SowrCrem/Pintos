@@ -29,6 +29,7 @@ struct process
 
     struct process *parent_process;  /* Pointer to thread's parent process */
     struct list children;            /* List of child processes */
+    struct list_elem child_elem;     /* List elem for child processes */
 
     bool loaded;                     /* Boolean for PROCESS loading executable */
     struct semaphore load_sema;      /* Control parent process when child loads exectuable */

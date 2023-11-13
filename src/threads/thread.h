@@ -98,7 +98,7 @@ struct thread
 		#ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
-    struct rs_manager *rs_manager;      /* Pointer to thread's rs_manager. */
+    struct process *process;            /* Pointer to thread's rs_manager. */
 		#endif
 
     /* Owned by thread.c. */

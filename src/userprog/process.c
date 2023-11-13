@@ -211,9 +211,25 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid) 
 {
-  while (true) {
-    continue;
+  struct thread *calling_process = thread_current ();
+
+  /* Search through the process struct with the same child_tid */
+  struct list *children = &calling_process->process->children;
+  struct thread *child = NULL;
+  for (struct list_elem *e = list_begin (children); e != list_end (children); 
+                                                    e = list_next (e))
+  {
+    child = list_entry (e, struct process, child_elem)->thread;
+    /* Match corresponding child_tid to the child thread */
+    if (child->tid == child_tid)
+      break;
+    child = NULL;
   }
+  
+  /* Check if child exists */
+  if (child == NULL)
+    return ERROR;
+
 }
 
 /* Free the current process's resources. */
