@@ -202,7 +202,7 @@ static void
 store_result (uint32_t result_ptr, struct intr_frame *if_) {
 	/* De-Reference result_ptr and store it in if_eax */
 	/* TODO: Check if result_ptr is a valid address (is this needed?) */
-	if_->eax = *result_ptr;
+	if_->eax = result_ptr;
 }
 
 
@@ -214,9 +214,7 @@ store_result (uint32_t result_ptr, struct intr_frame *if_) {
 static void
 halt (void)
 {
-	// printf ("(halt) shutting down\n");
 	shutdown_power_off ();
-	printf ("(halt) shouldn't reach this point\n");
 }
 
 /* Terminates the current user program, sending its exit status to 
@@ -320,7 +318,7 @@ read (int fd, void *buffer, unsigned size)
 static int
 write (int fd, const void *buffer, unsigned size)
 {
-	if (!(size > MAX_CONSOLE_FILE_SIZE))
+	if (size <= MAX_CONSOLE_FILE_SIZE)
 	{
 		if (fd == STDOUT_FILENO)
 		{
@@ -448,14 +446,15 @@ syscall_read (struct intr_frame *if_)
 static void
 syscall_write (struct intr_frame *if_)
 {
-	/* TODO: Retrieve fd, buffer, size from if_ or an argv array */
-	int fd;
-	void *buffer;
-	unsigned size;
+	/* Retrieve fd, buffer, size from if_ or an argv array */
+	int fd = syscall_get_arg(if_, 1);
+	void *buffer = syscall_get_arg(if_, 2);
+	unsigned size = syscall_get_arg(if_, 3);
 
 	/* Get result and store it in if_->eax */
 	int result = write (fd, buffer, size);
-	store_result(&result, if_);
+	if_->eax = result;
+	//store_result(&result, if_);
 }
 
 static void
@@ -518,12 +517,8 @@ syscall_init (void)
 }
 
 void
-syscall_execute_function (int32_t syscall_no, int no_args, struct intr_frame *if_)
+syscall_execute_function (int32_t syscall_no, struct intr_frame *if_)
 {
-	if (no_args < 0 || no_args > 3)
-	{
-		terminate_userprog(ERROR);
-	}
 	void* (*func_pointer) (struct intr_frame *if_) = system_call_function[syscall_no];
 	func_pointer (if_);
 }
@@ -536,7 +531,7 @@ syscall_handler (struct intr_frame *if_)
 	/* Verification of user provided pointer happens within get_user_safe(), and dereferences. */
 
 	/* TODO: Remove page-dir check and modify page_fault() in exception.c to catch invalid user pointers */
-	void *page = pagedir_get_page (thread_current ()->pagedir, if_->frame_pointer)
+	void *page = pagedir_get_page (thread_current ()->pagedir, if_->frame_pointer);
 
 	if (syscall_no != ERROR && page != NULL)
 	{
@@ -544,7 +539,7 @@ syscall_handler (struct intr_frame *if_)
 		if_->frame_pointer = (*(uint32_t *) if_->frame_pointer);
 
 		/* Execute Syscall */
-		syscall_execute_function (syscall_no, expected_args, if_);
+		syscall_execute_function (syscall_no, if_);
 	}
 	else
 	{
