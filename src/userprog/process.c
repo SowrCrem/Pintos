@@ -269,6 +269,25 @@ process_free (struct process *p)
   }
 }
 
+/* Initialises a process. This function is called for each thread creation */
+void process_init (struct thread *t, struct process *parent)
+{
+  /* Dynamically allocate memory */
+  struct process *p = malloc (sizeof (struct process));
+
+  p->thread = t;
+
+  p->parent_process = thread_current ()->process;
+  list_init (&p->children);
+  
+  sema_init (&p->load_sema, 0);
+
+  p->exited = false;
+  sema_init (&p->exit_sema, 0);
+  p->exit_status = NOT_EXITED;
+
+}
+
 /* Free the current process's resources. */
 void
 process_exit (void)
