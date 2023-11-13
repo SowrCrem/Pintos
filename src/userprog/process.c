@@ -230,6 +230,12 @@ process_wait (tid_t child_tid)
   if (child == NULL)
     return ERROR;
 
+  /* Block parent process from running */
+  struct process *child_process = child->process;
+  sema_down (&child_process->exit_sema);
+
+  
+
 }
 
 /* Free the current process's resources. */
