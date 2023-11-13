@@ -23,6 +23,23 @@ void process_activate (void);
 
    Each user process has an rs_manager, used to store its children
    and its exit status, and also some synchronization primitives. */
+struct process
+{
+    struct thread *thread;           /* Pointer to actual THREAD */
 
+    struct process *parent_process;  /* Pointer to thread's parent process */
+    struct list children;            /* List of child processes */
+
+    bool loaded;                     /* Boolean for PROCESS loading executable */
+    struct semaphore load_sema;      /* Control parent process when child loads exectuable */
+
+    bool exited;                     /* Boolean for THREAD exit status */
+    struct semaphore exit_sema;      /* Control parent process when child is exiting */
+    int exit_status;                 /* Exit Status of the THREAD */
+
+    struct hash *file_table;         /* Hash Table for mapping files owned by process to fd */
+    int fd_current;                  /* Current fd value of the executable file */
+
+}
 
 #endif /* userprog/process.h */
