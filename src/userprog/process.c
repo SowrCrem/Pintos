@@ -69,12 +69,6 @@ static void parse_arguments (const char *command_line, char **args, int argc)
   args[argc] = NULL; /* Set the last argument to NULL. */
 }
 
-void
-add_child (struct thread *parent, struct thread *child)
-{
-  return;
-}
-
 /* Initializes thread CHILD's rs_manager as a child of PARENT's
    rs_manager.
    
@@ -91,10 +85,13 @@ rs_manager_init (struct rs_manager *parent, struct thread *child)
     list_push_back (&parent->children, &rs->child_elem);
 
   list_init (&rs->children);
-  rs->thread = child;
+  rs->thread = child;         /* tid > thread*; will remove later. */
+  rs->tid = child->tid;
   sema_init (&rs->child_load_sema, 0);
   sema_init (&rs->child_exit_sema, 0);
   rs->exit_status = NOT_EXITED;
+  rs->error = false;
+  rs->load_success = true;
 
   /* Update child rs_manager pointer. */
   child->rs_manager = rs; 
@@ -106,15 +103,15 @@ void
 rs_manager_free (struct rs_manager *rs) 
 {
   /* Update exit status. */
-  if (rs->error) 
-    rs->exit_status = SUCCESS;
-  else
-    rs->exit_status = ERROR;
+  // if (rs->error) 
+  //   rs->exit_status = ERROR;
+  // else
+  //   rs->exit_status = SUCCESS;
 
+  /* Increment semaphore to allow parent to return from wait. */
   sema_up (&rs->child_exit_sema);
+  // printf ("(rs_manager_free) increment exit sema for %s\n", rs->thread->name);
 
-  /* If rs manager's parent that exists and is not running, 
-     free parent rs_manager. */
   if (rs->parent_rs_manager->thread != NULL) 
   {
     /* Free parent rs_manager if RS parent process has exited. */
@@ -123,6 +120,7 @@ rs_manager_free (struct rs_manager *rs)
       rs_manager_free (rs->parent_rs_manager);
     } else /* Don't free any memory if parent process is alive. */
     {
+      // printf ("(rs_manager_free) don't free for %s\n", rs->thread->name);
       return;
     }
   }
@@ -137,6 +135,9 @@ rs_manager_free (struct rs_manager *rs)
     struct rs_manager *child_rs_manager = 
             list_entry (e, struct rs_manager, child_elem);
 
+    /* Set child rs_manager's parent_rs_manager to NULL. */
+    child_rs_manager->parent_rs_manager = NULL;
+
     /* If child process is not running, free its rs_manager. */
     if (child_rs_manager->exit_status != NOT_EXITED) 
       rs_manager_free (child_rs_manager);
@@ -146,25 +147,43 @@ rs_manager_free (struct rs_manager *rs)
   free (rs);
 }
 
-/* Returns pointer to child process, given parent process pointer 
+/* Returns pointer to child rs_manager, given parent process pointer 
    and child process TID. 
    
    Returns NULL if not found. */
 struct rs_manager*
 get_child (struct thread *parent, tid_t child_tid)
 {
+  // printf ("(get_child) entered, try find %d\n", child_tid);
+
   struct list *children = &parent->rs_manager->children;
+
+  if (list_empty (children)) 
+  {
+    // printf ("(get_child) FAIL child not found\n");
+    return NULL;
+  }
+
   struct rs_manager *child_rs_manager = NULL;
-  for (struct list_elem *e = list_begin (children); e != list_end (children); 
-       e = list_next (children))
+  struct list_elem *e;
+  for (e = list_begin (children); e != list_end (children); 
+       e = list_next (e))
   {
     child_rs_manager = list_entry (e, struct rs_manager, child_elem);
-    /* Match corresponding tid to the child thread */
-    if (child_rs_manager->thread->tid == child_tid)
+    /* Match corresponding tid to the child thread. */
+    if (child_rs_manager->tid == child_tid)
       break;
     child_rs_manager = NULL;
   }
-  
+
+  if (child_rs_manager == NULL)
+  {
+    // printf ("(get_child) FAIL child not found\n");
+  } else 
+  {
+    // printf ("(get_child) SUCCESS child id %d found\n", child_rs_manager->tid);
+  }
+
   return child_rs_manager;
 }
 
@@ -175,7 +194,7 @@ get_child (struct thread *parent, tid_t child_tid)
 tid_t
 process_execute (const char *file_name) 
 {
-	printf ("(process-exec) file name: %s\n", file_name);
+	// printf ("(process-exec) file name: %s\n", file_name);
 
   char *fn_copy;
   tid_t tid;
@@ -189,7 +208,7 @@ process_execute (const char *file_name)
 
   char* save_ptr;
   char* program_name = strtok_r (file_name, " ", &save_ptr);
-	printf ("(process-exec) program name: %s\n", program_name);
+	// printf ("(process-exec) program name: %s\n", program_name);
 
   /* Create a new thread to execute FILE_NAME (first item in argv). */
   tid = thread_create (program_name, PRI_DEFAULT, start_process, fn_copy);
@@ -214,16 +233,32 @@ int
 process_wait (tid_t child_tid) 
 {
   struct thread *parent = thread_current ();
+  printf ("(process_wait) entered, %s (tid %d) waiting on tid %d\n",
+          parent->name, parent->tid, child_tid);
 
+  // printf ("(process_wait) get_child about to be called\n");
   /* Search through the rs_manager struct with the same child_tid. */
   struct rs_manager *child_rs_manager = get_child (parent, child_tid);
-  
+
   /* Return error if child process does not exist. */
-  if (child_rs_manager->thread == NULL)
+  if (child_rs_manager == NULL)
+  {
+    // printf ("(process_wait) ERROR child not found\n");
     return ERROR;
-  
+  }
+
+  // printf ("(process_wait) get_child returned child tid %d\n", 
+  //         child_rs_manager->tid);
+
   /* Await termination of child process. */
+  // printf ("(process_wait) about to decrement exit sema for %s\n", 
+  //         child_rs_manager->thread->name);
   sema_down (&child_rs_manager->child_exit_sema);
+  // printf ("(process_wait) just decremented exit sema for %s\n", 
+  //         child_rs_manager->thread->name);
+
+  printf ("(process_wait) %d exit status is %d\n", child_rs_manager->tid,
+          child_rs_manager->exit_status);
 
   /* Continues only if child process has exited. */
 
@@ -242,9 +277,8 @@ process_exit (void)
   struct thread *cur = thread_current ();
   uint32_t *pd;
 
-  /* Performs sema_up on child_exit_sema so parent process can 
-     return from wait. Also frees memory for rs_manager if certain 
-     conditions met. */
+  /* Increments child_exit_sema so parent process can return from
+     wait. Also frees memory for rs_manager if certain conditions met. */
   rs_manager_free (cur->rs_manager);
 
   /* Destroy the current process's page directory and switch back
@@ -311,7 +345,7 @@ push_pointer_to_stack (void **esp, void *ptr)
 static void
 start_process (void *file_name_)
 {
-	printf("(start_process) entered \n");
+	// printf("(start_process) entered \n");
   char *file_name = file_name_;
   struct intr_frame if_;
   bool success;
@@ -341,6 +375,7 @@ start_process (void *file_name_)
     /* Update rs_manager states and quit if load failed. */
     cur->rs_manager->load_success = false;
     sema_up (&cur->rs_manager->child_load_sema);
+    // printf ("(start_process) FAIL load sema incremented for %s\n", cur->name);
 
     thread_exit ();
   }
@@ -348,6 +383,7 @@ start_process (void *file_name_)
   /* Increment child_load_sema on success, to allow parent process
      to return from exec. */
   sema_up (&cur->rs_manager->child_load_sema);
+  // printf ("(start_process) SUCCESS load sema incremented for %s\n", cur->name);
 
   /* Push words to stack. */
   for (int i = argc - 1; i >= 0; i--) 

@@ -133,7 +133,8 @@ syscall_get_arg (struct intr_frame *if_, int arg_num)
 {
 	int32_t arg = 
 		get_user_word_safe ((uint8_t *) if_->esp + (WORD_SIZE * (arg_num)));
-	printf("(syscall-get-arg) argument: %d\n", arg);
+	// printf("(syscall-get-arg) integer argument %d: %d for %s\n", arg_num, 
+	// 			 arg, thread_current ()->name);
 	return arg;
 }
 
@@ -149,11 +150,11 @@ syscall_invalid_arg (struct intr_frame *if_, int arg_num)
 static bool
 syscall_get_args (struct intr_frame *if_, int argc, char** argv)
 {
-	printf("(syscall-get-args) entered\n");
+	// printf("(syscall-get-args) entered\n");
 	for (int i = 0; i < argc; i++)
 	{
 		int32_t syscall_arg = syscall_get_arg (if_, i + 1);
-		printf("(setup-argv) syscall arg: %d\n", syscall_arg);
+		// printf("(setup-argv) syscall arg: %d\n", syscall_arg);
 		if (syscall_arg == ERROR)
 			return false;
 		argv[i] = (char *) &syscall_arg;
@@ -178,6 +179,7 @@ terminate_userprog (int status)
 
 	/* Terminate current process. */
 	thread_exit ();
+	printf ("(terminate_userprog) should not reach this point\n");
 }
 
 /* Terminates by calling shutdown_power_off(). Seldom used because
@@ -185,9 +187,9 @@ terminate_userprog (int status)
 static void
 syscall_halt (void)
 {
-	printf ("(halt) shutting down\n");
+	// printf ("(halt) shutting down\n");
 	shutdown_power_off ();
-	printf ("(halt) shouldn't print\n");
+	printf ("(halt) shouldn't reach this point\n");
 }
 
 /* Terminates the current user program, sending its exit status to 
@@ -196,6 +198,7 @@ syscall_halt (void)
 static void
 syscall_exit (int status)
 {
+	// printf ("(sycall_exit) running exit(%d)\n", status);
 	terminate_userprog (status);
 }
 
@@ -210,7 +213,19 @@ syscall_exec (const char *cmd_line)
 
 	/* Find newly created child process and decrement child_load_sema. */
   struct rs_manager *child_rs_manager = get_child (thread_current (), tid);
+	
+	if (child_rs_manager == NULL)
+	{
+		// printf ("(syscall_exec) newly created child process not found\n");
+		return ERROR;
+	}
+
+  // printf ("(syscall_exec) about to decrement load sema for %s\n",
+	// 				child_rs_manager->thread->name);
   sema_down (&child_rs_manager->child_load_sema);
+
+	// printf ("(syscall_exec) just decremented load sema for %s, with tid %d\n",
+	// 				child_rs_manager->thread->name, tid);
 
   /* Continues (and returns) only after child process has loaded successfully
      (or failed load). */
@@ -353,7 +368,7 @@ syscall_init (void)
 
 
 void
-	syscall_execute_function (uint32_t (*func_pointer)(), int no_args, struct intr_frame *if_, uint32_t* result)
+syscall_execute_function (uint32_t (*func_pointer)(), int no_args, struct intr_frame *if_, uint32_t* result)
 {
 	/* Each case calls the specific function for the specified syscall */
 	switch (no_args) {
@@ -382,6 +397,8 @@ syscall_handler (struct intr_frame *if_)
 	int32_t syscall_no = get_syscall_no(if_);
 	
 	int expected_args = syscall_expected_argcs[syscall_no];
+	// printf ("(syscall_handler) syscall num: %d; expected args: %d\n", 
+	// 				(int) syscall_no, expected_args);
 
 	/* Verification of user provided pointer happens within get_user_safe(), 
 		 and dereferences. */
@@ -395,7 +412,7 @@ syscall_handler (struct intr_frame *if_)
 		if_->frame_pointer = (*(uint32_t *) if_->frame_pointer);
 
 		/* Initialise and setup arguments. */
-		//printf ("(syscall_handler) setting up arguments\n");
+		// printf ("(syscall_handler) setting up arguments\n");
 
 		uint32_t result;
 
@@ -412,6 +429,7 @@ syscall_handler (struct intr_frame *if_)
 	}
 
 	/* Handler Finishes - Exit the current Thread */
-	//printf ("(syscall_handler) end of function.\n");
+	// printf ("(syscall_handler) end of function for %s\n", 
+	// 				thread_current ()->name);
 
 }

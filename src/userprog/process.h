@@ -32,6 +32,7 @@ struct rs_manager
     struct list_elem child_elem;            /* List elem for children list.  */ 
 
     struct thread *thread;                  /* Pointer to actual process. */
+    tid_t tid;                              /* Thread identifier. */
     
     struct semaphore child_exit_sema;       /* Semaphore for process exit. */
     struct semaphore child_load_sema;       /* Semaphore for process load. */
