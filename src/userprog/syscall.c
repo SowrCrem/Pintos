@@ -174,6 +174,8 @@ terminate_userprog (int status)
 	/* Send exit status to kernel. */
 	cur->rs_manager->exit_status = status;
 
+	// printf ("%s current tid %d\n", cur->name, cur->tid);
+
 	/* Output termination message (only if it is not a kernel thread). */
 	printf ("%s: exit(%d)\n", cur->name, status);
 
@@ -373,16 +375,16 @@ syscall_execute_function (uint32_t (*func_pointer)(), int no_args, struct intr_f
 	/* Each case calls the specific function for the specified syscall */
 	switch (no_args) {
 		case 0:
-			result = func_pointer ();
+			*result = func_pointer ();
 			break;
 		case 1:
-			result = func_pointer (syscall_get_arg(if_, 1));
+			*result = func_pointer (syscall_get_arg(if_, 1));
 			break;
 		case 2:
-			result = func_pointer (syscall_get_arg(if_, 1), syscall_get_arg(if_, 2));
+			*result = func_pointer (syscall_get_arg(if_, 1), syscall_get_arg(if_, 2));
 			break;
 		case 3:
-			result = func_pointer (syscall_get_arg(if_, 1), syscall_get_arg(if_, 2), syscall_get_arg(if_, 3));
+			*result = func_pointer (syscall_get_arg(if_, 1), syscall_get_arg(if_, 2), syscall_get_arg(if_, 3));
 			break;
 		default:
 			/* Error for invalid Number of Arguments */

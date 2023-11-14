@@ -233,32 +233,37 @@ int
 process_wait (tid_t child_tid) 
 {
   struct thread *parent = thread_current ();
-  printf ("(process_wait) entered, %s (tid %d) waiting on tid %d\n",
-          parent->name, parent->tid, child_tid);
+  // printf ("(process_wait) entered, %s (tid %d) waiting on tid %d\n",
+  //         parent->name, parent->tid, child_tid);
 
   // printf ("(process_wait) get_child about to be called\n");
+
   /* Search through the rs_manager struct with the same child_tid. */
   struct rs_manager *child_rs_manager = get_child (parent, child_tid);
+
+  //  printf ("(process_wait) waiting on %s\n", child_rs_manager->thread->name);
 
   /* Return error if child process does not exist. */
   if (child_rs_manager == NULL)
   {
-    // printf ("(process_wait) ERROR child not found\n");
+    //  printf ("(process_wait) ERROR child not found\n");
     return ERROR;
   }
 
   // printf ("(process_wait) get_child returned child tid %d\n", 
   //         child_rs_manager->tid);
 
-  /* Await termination of child process. */
   // printf ("(process_wait) about to decrement exit sema for %s\n", 
   //         child_rs_manager->thread->name);
+  
+  /* Await termination of child process. */
   sema_down (&child_rs_manager->child_exit_sema);
+
   // printf ("(process_wait) just decremented exit sema for %s\n", 
   //         child_rs_manager->thread->name);
 
-  printf ("(process_wait) %d exit status is %d\n", child_rs_manager->tid,
-          child_rs_manager->exit_status);
+  // printf ("(process_wait) %d exit status is %d\n", child_rs_manager->tid,
+  //         child_rs_manager->exit_status);
 
   /* Continues only if child process has exited. */
 
