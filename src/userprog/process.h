@@ -26,7 +26,6 @@ void process_activate (void);
 struct process
 {
     struct thread *thread;           /* Pointer to actual THREAD */
-    int pid;
 
     struct process *parent_process;  /* Pointer to thread's parent process */
     struct list children;            /* List of child processes */

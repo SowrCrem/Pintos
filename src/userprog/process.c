@@ -228,7 +228,7 @@ process_wait (tid_t child_tid)
   {
     child = list_entry (e, struct process, child_elem);
     /* Match corresponding child_tid to the child thread */
-    if (child->thread->tid == (pid_t) child_tid)
+    if (child->thread->tid == child_tid)
       break;
 
     child = NULL;
@@ -292,8 +292,7 @@ void process_init (struct thread *t, struct process *parent)
   struct process *p = malloc (sizeof (struct process));
 
   p->thread = t;
-  p->pid = (pid_t) t->tid;
-;
+
   p->parent_process = parent;
   list_init (&p->children);
   if (parent != NULL)
