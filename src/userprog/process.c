@@ -150,8 +150,13 @@ start_process (void *file_name_)
   char **argv = (char**) malloc(sizeof(char*) * argc);  /* List of addresses of each string */
 	parse_arguments(file_name, args, argc);
 
+  struct process *p = thread_current ()->process;
   success = load (args[0], &if_.eip, &if_.esp);
   
+  if (!success)
+  {
+    p->exit_status = ERROR;
+  }
   /* If load failed, quit. */
   palloc_free_page (file_name);
 
@@ -211,18 +216,21 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid) 
 {
-  struct thread *calling_process = thread_current ();
+  struct process *calling_p = thread_current ()->process;
+  if (calling_p == NULL)
+    return ERROR;
 
   /* Search through the process struct with the same child_tid */
-  struct list *children = &calling_process->process->children;
-  struct thread *child = NULL;
+  struct list *children = &calling_p->children;
+  struct process *child;
   for (struct list_elem *e = list_begin (children); e != list_end (children); 
                                                     e = list_next (e))
   {
-    child = list_entry (e, struct process, child_elem)->thread;
+    child = list_entry (e, struct process, child_elem);
     /* Match corresponding child_tid to the child thread */
-    if (child->tid == child_tid)
+    if (child->thread->tid == (pid_t) child_tid)
       break;
+
     child = NULL;
   }
   
@@ -231,8 +239,16 @@ process_wait (tid_t child_tid)
     return ERROR;
 
   /* Block parent process from running */
-  struct process *child_process = child->process;
-  sema_down (&child_process->exit_sema);
+  sema_down (&child->exit_sema);
+
+  int exit_status = child->exit_status;
+
+
+  list_remove (&child->child_elem);
+
+  free (child);
+
+  return exit_status;
 
 }
 
@@ -258,14 +274,14 @@ process_free (struct process *p)
 
   /* If parent process is not terminated, make child process 
      information available */
-  if (p->parent_process == NULL)
-  {
-    free (p);
-  }
-  else 
+  if (p->parent_process != NULL)
   {
     p->exited = true;
     sema_up (&p->exit_sema);
+  }
+  else 
+  {
+    free (p);
   }
 }
 
@@ -276,15 +292,23 @@ void process_init (struct thread *t, struct process *parent)
   struct process *p = malloc (sizeof (struct process));
 
   p->thread = t;
-
+  p->pid = (pid_t) t->tid;
+;
   p->parent_process = parent;
   list_init (&p->children);
+  if (parent != NULL)
+  {
+    list_push_back (&parent->children, &p->child_elem);
+  }
   
+  p->loaded = false;
   sema_init (&p->load_sema, 0);
 
   p->exited = false;
   sema_init (&p->exit_sema, 0);
-  p->exit_status = NOT_EXITED;
+  p->exit_status = SUCCESS;
+
+  t->process = p;
 
 }
 

@@ -133,7 +133,7 @@ syscall_get_arg (struct intr_frame *if_, int arg_num)
 {
 	int32_t arg = 
 		get_user_word_safe ((uint8_t *) if_->esp + (WORD_SIZE * (arg_num)));
-	printf("(syscall-get-arg) argument: %d\n", arg);
+	// printf("(syscall-get-arg) argument: %d\n", arg);
 	return arg;
 }
 
@@ -149,11 +149,11 @@ syscall_invalid_arg (struct intr_frame *if_, int arg_num)
 static bool
 syscall_get_args (struct intr_frame *if_, int argc, char** argv)
 {
-	printf("(syscall-get-args) entered\n");
+	// printf("(syscall-get-args) entered\n");
 	for (int i = 0; i < argc; i++)
 	{
 		int32_t syscall_arg = syscall_get_arg (if_, i + 1);
-		printf("(setup-argv) syscall arg: %d\n", syscall_arg);
+		// printf("(setup-argv) syscall arg: %d\n", syscall_arg);
 		if (syscall_arg == ERROR)
 			return false;
 		argv[i] = (char *) &syscall_arg;
@@ -168,16 +168,16 @@ syscall_get_args (struct intr_frame *if_, int argc, char** argv)
 static void
 terminate_userprog (int status)
 {
-	// struct thread *cur = thread_current();
+	struct thread *cur = thread_current();
 
-	// /* Send exit status to kernel. */
-	// cur->rs_manager->exit_status = status;
+	/* Send exit status to kernel. */
+	cur->process->exit_status = status;
 
-	// /* Output termination message (only if it is not a kernel thread). */
-	// printf ("%s: exit(%d)\n", cur->name, status);
+	/* Output termination message (only if it is not a kernel thread). */
+	printf ("%s: exit(%d)\n", cur->name, status);
 
-	// /* Terminate current process. */
-	// thread_exit ();
+	/* Terminate current process. */
+	thread_exit ();
 }
 
 /* Terminates by calling shutdown_power_off(). Seldom used because
@@ -185,9 +185,7 @@ terminate_userprog (int status)
 static void
 syscall_halt (void)
 {
-	printf ("(halt) shutting down\n");
 	shutdown_power_off ();
-	printf ("(halt) shouldn't print\n");
 }
 
 /* Terminates the current user program, sending its exit status to 
@@ -206,6 +204,7 @@ syscall_exit (int status)
 static pid_t
 syscall_exec (const char *cmd_line)
 {
+	return 0;
 // 	tid_t tid = process_execute (cmd_line);
 
 // 	/* Find newly created child process and decrement child_load_sema. */
@@ -220,14 +219,13 @@ syscall_exec (const char *cmd_line)
 //     return tid;
 //   else
 //     return ERROR;
-return 0;
 }
 
 /* Waits for a child process pid and retrieves the child’s exit status. */
 static int
 syscall_wait (pid_t pid)
 {
-	return process_wait (pid);
+	return process_wait ((tid_t) pid);
 }
 
 /* Creates a new file called file initially initial size bytes in size. 
@@ -238,7 +236,8 @@ syscall_wait (pid_t pid)
 static bool
 syscall_create (const char *file, unsigned initial_size)
 {
-	return filesys_create (file, initial_size);
+	//return filesys_create (file, initial_size);
+	return false;
 }
 
 /* Deletes the file called file. 
@@ -249,10 +248,11 @@ syscall_create (const char *file, unsigned initial_size)
 static bool
 syscall_remove (const char *file)
 {
-	if (file == NULL)
-		return false;
+	// if (file == NULL)
+	// 	return false;
 
-	return filesys_remove (file);
+	// return filesys_remove (file);
+	return false;
 }
 
 static int

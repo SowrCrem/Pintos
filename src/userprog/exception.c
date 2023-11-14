@@ -80,8 +80,6 @@ kill (struct intr_frame *f)
      exception originated. */
    
 
-   /* Set boolean to set exit status to ERROR in thread_set_priority. */
-   // thread_current ()->process->error = true;
 
   switch (f->cs)
     {
