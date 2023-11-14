@@ -1,3 +1,5 @@
+#include "filesys/file.h"
+#include "filesys/filesys.h"
 #include "../userprog/syscall.h"
 #include "../threads/interrupt.h"
 #include "../threads/thread.h"
@@ -6,6 +8,7 @@
 #include "../userprog/pagedir.h"
 #include "../threads/vaddr.h"
 #include "../lib/syscall-nr.h"
+#include "../devices/input.h"
 #include <stdio.h>
 #include <syscall-nr.h>
 
@@ -315,22 +318,111 @@ remove (const char *file)
 static int
 open (const char *file)
 {
-	/* TODO */
-	return 0;
+
+	/* Process that opened this file */
+	struct process *p = thread_current ()->process;
+
+	/* Check validity of file name */
+	if (file == NULL)
+	{
+		return ERROR;
+	}
+
+	/* Add file and corresponding fd to process's hash table */
+
+	/* Open file */
+	lock_acquire (&p->filesys_lock);
+	struct file *f = filesys_open (file);
+	lock_release (&p->filesys_lock);
+	/* Check validity of open file */
+	if (f == NULL)
+	{
+		return ERROR;
+	}
+
+	/* Find fd */
+
+	/* Dynamically allocate the file entry */
+	struct file_entry *entry = malloc (sizeof (struct file_entry));
+
+	if (entry == NULL)
+	{
+		lock_acquire (&p->filesys_lock);
+		file_close (file);
+		lock_release (&p->filesys_lock);
+
+		terminate_userprog (ERROR);
+		NOT_REACHED ();
+	}
+
+	entry->file = f;
+	entry->fd   = p->fd_new;
+
+	p->fd_new++;
+
+	/* Insert the file entry into the process's table */
+	hash_insert (&p->file_table, &entry->hash_elem);
+
+	return p->fd_new;
+
 }
+
 
 static int
 filesize (int fd)
 {
-	/* TODO */
-	return 0;
+	struct process *p = thread_current ()->process;
+
+	struct file_entry *f = get_file_entry (fd);
+	if (f == NULL)
+	{
+		return ERROR;
+	}
+	int result = file_length (f->file);
+	return result;
+
 }
 
 static int
 read (int fd, void *buffer, unsigned size)
 {
-	/* TODO */
 	return 0;
+	// struct process *p = thread_current ()->process;
+
+	// if (buffer == NULL || !is_user_vaddr (buffer + size))
+	// {
+	// 	terminate_userprog (ERROR);
+	// }
+
+	// if (fd == STDOUT_FILENO)
+	// {
+	// 	/* Cannot read from standard output. */
+	// 	return;
+	// }
+	// else if (fd == STDIN_FILENO)
+	// {
+	// 	/* Can read from standard input. */
+	// 	for (unsigned i = 0; i < size; i++)
+	// 	{
+	// 		((uint8_t *) buffer) [i] = input_getc ();
+	// 	}
+	// 	return size;
+	// }
+	// else 
+	// {
+	// 	struct file *file = get_file_entry (fd)->file;
+
+	// 	if (file == NULL)
+	// 	{
+	// 		return ERROR;
+	// 	}
+
+	// 	lock_acquire (&p->filesys_lock);
+	// 	int result = file_read (file, buffer, size);
+	// 	lock_release (&p->filesys_lock);
+
+	// 	return result;
+	// }
 }
 
 static int
@@ -349,20 +441,44 @@ write (int fd, const void *buffer, unsigned size)
 static void
 seek (int fd, unsigned position)
 {
-	/* TODO */
+	struct file *file = get_file_entry (fd);
+
+	file_seek (file, (off_t) position);
 }
 
 static unsigned
 tell (int fd)
 {
-	/* TODO */
-	return 0;
+	struct file *file = get_file_entry (fd);
+
+	file_tell (fd);
 }
 
 static void
 close (int fd)
 {
-	/* TODO */
+	struct process *p = thread_current ()->process;
+	struct file_entry *file_entry = get_file_entry (fd);
+
+	if (file_entry == NULL)
+	{
+		terminate_userprog (ERROR);
+		NOT_REACHED ();
+	}
+
+	/* Call file_close on file */
+	lock_acquire (&p->filesys_lock);
+	file_close (file_entry->file);
+	lock_release (&p->filesys_lock);
+
+	/* Remove entry from table */
+	hash_delete (&p->file_table, &file_entry->hash_elem);
+
+	/* Decrement fd_current - maybe not necessary */
+
+	/* Free entry cause malloced */
+	free (file_entry);
+	file_entry->file = NULL;
 }
 
 
@@ -434,7 +550,7 @@ static void
 syscall_open (struct intr_frame *if_)
 {
 	/* TODO: Retrieve file from if_ or an argv array */
-	char *file = syscall_get_arg (if_, 1);
+	char *file = (char *) syscall_get_arg (if_, 1);
 
 	/* Get result and store it in if_->eax */
 	int result = open (file);
@@ -510,7 +626,7 @@ static void
 syscall_close (struct intr_frame *if_)
 {
 	/* TODO: Retrieve fd, buffer, size from if_ or an argv array */
-	int fd = syscall_get_arg (if_, 1);
+	int fd = (int) syscall_get_arg (if_, 1);
 
 	/* Execute close syscall with arguments */
 	close (fd);
@@ -576,4 +692,29 @@ syscall_handler (struct intr_frame *if_)
 
 	/* Handler Finishes - Exit the current Thread */
 	/* printf ("(syscall_handler) end of function for %s\n",	thread_current ()->name); */
+}
+
+/* Helper function to return file_entry for corresponding fd*/
+struct file_entry *
+get_file_entry (int fd)
+{
+
+	struct process *p = thread_current ()->process;
+
+	/* Get file from fd value */
+	struct file_entry target_entry;
+	target_entry.fd = fd;
+
+	struct hash *table = &p->file_table;
+	struct hash_elem *elem = hash_find (table, &target_entry.hash_elem);
+	
+	
+
+	if (elem == NULL)
+	{
+		return NULL;
+	}
+	struct file_entry *file_entry = hash_entry (elem, struct file_entry, hash_elem);
+	return file_entry;
+
 }

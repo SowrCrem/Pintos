@@ -5,6 +5,7 @@
 #include "threads/synch.h"
 #include <debug.h>
 #include <list.h>
+#include <hash.h>
 
 /* Wasn't compiling without this typedef from thread.h - ASK UTA ! */
 typedef int tid_t;
@@ -18,6 +19,31 @@ tid_t process_execute (const char *);
 int process_wait (tid_t);
 void process_exit (void);
 void process_activate (void);
+
+/* Computes and returns the hash value for hash element E, given
+   auxiliary data AUX. */
+unsigned file_hash_func (const struct hash_elem *e, void *aux);
+
+/* Compares the value of two hash elements A and B, given
+   auxiliary data AUX.  Returns true if A is less than B, or
+   false if A is greater than or equal to B. */
+bool file_less_func (const struct hash_elem *a,
+                             const struct hash_elem *b,
+                             void *aux);
+
+struct file_entry *
+get_file_entry (int fd);
+
+void file_action_func (struct hash_elem *e, void *aux);
+
+/* File Entry for Hash Table */
+struct file_entry 
+{
+    struct hash_elem hash_elem;         /* Hash Elem for input into Hash Table */
+    int fd;                             /* Integer fd (file descriptors) */
+    struct file *file;                  /* Struct file */
+};
+
 
 /* A relationship manager for user processes. 
 
@@ -39,8 +65,10 @@ struct process
     struct semaphore exit_sema;      /* Control parent process when child is exiting */
     int exit_status;                 /* Exit Status of the THREAD */
 
-    struct hash *file_table;         /* Hash Table for mapping files owned by process to fd */
-    int fd_current;                  /* Current fd value of the executable file */
+    struct lock filesys_lock;        /* Lock for file table */
+    struct hash file_table;         /* Hash Table for mapping files owned by process to fd */
+    int fd_new;                      /*  Fd value of the next file to be executed */
+    struct file *executable;         /* Executable file of process */
 
 };
 

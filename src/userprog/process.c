@@ -273,6 +273,7 @@ process_free (struct process *p)
     struct list_elem *e = list_pop_front (&p->children);
     struct process *child_process = list_entry(e, struct process, child_elem);
 
+
     if (child_process->exited)
     {
       /* If child thread is not terminated, free thread's process */
@@ -283,6 +284,11 @@ process_free (struct process *p)
       child_process->parent_process = NULL;
     } 
   }
+
+  lock_acquire (&p->filesys_lock);
+  file_close (p->executable);
+  hash_destroy (&p->file_table, &file_action_func);
+  lock_release (&p->filesys_lock);
 
   /* If parent process is not terminated, make child process 
      information available */
@@ -304,16 +310,12 @@ void process_init (struct thread *t, struct process *parent)
   struct process *p = malloc (sizeof (struct process));
 
   p->thread = t;
+  p->pid = (pid_t) t->tid;
 
   p->parent_process = parent;
   if (parent != NULL)
-  {
     list_push_back (&parent->children, &p->child_elem);
-  }
   list_init (&p->children);
-
-  p->pid = (pid_t) t->tid;
-
   
   p->loaded = false;
   sema_init (&p->load_sema, 0);
@@ -322,10 +324,40 @@ void process_init (struct thread *t, struct process *parent)
   sema_init (&p->exit_sema, 0);
   p->exit_status = SUCCESS;
 
+  hash_init (&p->file_table, file_hash_func, file_less_func, NULL);
+  lock_init (&p->filesys_lock);
+  p->executable = NULL;
+  p->fd_new = 2;
+
   t->process = p;
 
   
 
+}
+
+/* Computes and returns the hash value for hash element E, given
+   auxiliary data AUX. */
+unsigned 
+file_hash_func (const struct hash_elem *e, void *aux UNUSED) 
+{
+  const struct file_entry *f = hash_entry (e, struct file_entry, hash_elem);
+
+  return hash_int (f->fd);
+
+}
+
+/* Compares the value of two hash elements A and B, given
+   auxiliary data AUX.  Returns true if A is less than B, or
+   false if A is greater than or equal to B. */
+bool 
+file_less_func (const struct hash_elem *a,
+                const struct hash_elem *b,
+                void *aux UNUSED)
+{
+  const struct file_entry *a_f = hash_entry (a, struct file_entry, hash_elem);
+  const struct file_entry *b_f = hash_entry (b, struct file_entry, hash_elem);
+
+  return (a_f->fd < b_f->fd);
 }
 
 /* Free the current process's resources. */
@@ -719,5 +751,19 @@ install_page (void *upage, void *kpage, bool writable)
      address, then map our page there. */
   return (pagedir_get_page (t->pagedir, upage) == NULL
           && pagedir_set_page (t->pagedir, upage, kpage, writable));
+}
+
+void file_action_func (struct hash_elem *e, void * UNUSED) {
+
+  struct process *p = thread_current ()->process;
+
+  struct file_entry *f_entry = hash_entry (e, struct file_entry, hash_elem);
+
+  lock_acquire (&p->filesys_lock);
+  file_close (f_entry->file);
+  lock_release (&p->filesys_lock);
+
+  free (f_entry);
+
 }
 
