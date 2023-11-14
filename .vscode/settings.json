@@ -3,6 +3,10 @@
         "synch.h": "c",
         "stdint.h": "c",
         "process.h": "c",
-        "__threading_support": "c"
+        "__threading_support": "c",
+        "filesys.h": "c",
+        "syscall.h": "c",
+        "pagedir.h": "c",
+        "vaddr.h": "c"
     }
 }
