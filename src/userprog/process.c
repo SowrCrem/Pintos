@@ -150,14 +150,20 @@ start_process (void *file_name_)
   char **argv = (char**) malloc(sizeof(char*) * argc);  /* List of addresses of each string */
 	parse_arguments(file_name, args, argc);
 
-  struct process *p = thread_current ()->process;
   success = load (args[0], &if_.eip, &if_.esp);
-  
-  if (!success)
+
+  /* Parent process if child process is loaded successfully or not */
+  struct process *p = thread_current ()->process;
+  p->loaded = success;
+
+  if (!success) 
   {
+    // palloc_free_page (file_name);
     p->exit_status = ERROR;
+    
+    // sema_up (&p->load_sema);
+    thread_exit ();
   }
-  /* If load failed, quit. */
   palloc_free_page (file_name);
 
   /* Push words to top of stack */
@@ -193,6 +199,10 @@ start_process (void *file_name_)
   /* Push a fake return adress */
   push_pointer_to_stack(&if_.esp, NULL);
 
+  sema_up (&p->load_sema);
+
+  // /* If load failed, quit. */
+  // palloc_free_page (file_name);
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -203,6 +213,7 @@ start_process (void *file_name_)
   asm volatile ("movl %0, %%esp; jmp intr_exit" : : "g" (&if_) : "memory");
   NOT_REACHED ();
 }
+
 
 /* Waits for thread TID to die and returns its exit status. 
  * If it was terminated by the kernel (i.e. killed due to an exception), 
@@ -274,14 +285,14 @@ process_free (struct process *p)
 
   /* If parent process is not terminated, make child process 
      information available */
-  if (p->parent_process != NULL)
+  if (p->parent_process == NULL)
   {
-    p->exited = true;
-    sema_up (&p->exit_sema);
+    free (p);
   }
   else 
   {
-    free (p);
+    p->exited = true;
+    sema_up (&p->exit_sema);
   }
 }
 
@@ -308,6 +319,8 @@ void process_init (struct thread *t, struct process *parent)
   p->exit_status = SUCCESS;
 
   t->process = p;
+
+  
 
 }
 

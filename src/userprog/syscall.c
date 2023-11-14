@@ -153,7 +153,7 @@ syscall_get_args (struct intr_frame *if_, int argc, char** argv)
 	for (int i = 0; i < argc; i++)
 	{
 		int32_t syscall_arg = syscall_get_arg (if_, i + 1);
-		// printf("(setup-argv) syscall arg: %d\n", syscall_arg);
+		printf("(setup-argv) syscall arg: %d\n", syscall_arg);
 		if (syscall_arg == ERROR)
 			return false;
 		argv[i] = (char *) &syscall_arg;
@@ -205,20 +205,48 @@ static pid_t
 syscall_exec (const char *cmd_line)
 {
 	return 0;
-// 	tid_t tid = process_execute (cmd_line);
+	// /* Runs executable of given cmd line file */
+	// pid_t pid = (pid_t) process_execute (cmd_line);
+	// /* Returns the new process program pid */
 
-// 	/* Find newly created child process and decrement child_load_sema. */
-//   struct rs_manager *child_rs_manager = get_child (thread_current (), tid);
-//   sema_down (&child_rs_manager->child_load_sema);
+	// /* Check validity of pid */
+	// if (pid == TID_ERROR)
+	// {
+	// 	return (pid_t) ERROR;
+	// }
 
-//   /* Continues (and returns) only after child process has loaded successfully
-//      (or failed load). */
+	// /* Cannot load or run for any reason */
+	// struct process *parent = thread_current ()->process;
 
-// 	/* Return TID if child process loaded succesfully, else -1. */
-//   if (child_rs_manager->load_success)
-//     return tid;
-//   else
-//     return ERROR;
+	// /* Find the file's corresponding process */
+	// struct list *children = &parent->children;
+  	// struct process *child;
+	// for (struct list_elem *e = list_begin (children); e != list_end (children); 
+	// 												e = list_next (e))
+	// {
+	// 	child = list_entry (e, struct process, child_elem);
+	// 	/* Match corresponding child_tid to the child thread */
+	// 	if (child->thread->tid == (tid_t) pid)
+	// 	break;
+	// 	child = NULL;
+	// }
+
+	// /* Check process validity */
+	// if (child == NULL)
+	// {
+	// 	return (pid_t) ERROR;
+	// }
+
+	// /* Block parent process (cur) from running when child attempting to load executable */
+	// sema_down (&parent->load_sema);
+
+	// /* Check if child is loaded */
+	// if (!parent->loaded)
+	// {
+	// 	return (pid_t) ERROR;
+	// }
+
+	// return pid;
 }
 
 /* Waits for a child process pid and retrieves the child’s exit status. */
@@ -359,16 +387,16 @@ void
 	/* Each case calls the specific function for the specified syscall */
 	switch (no_args) {
 		case 0:
-			result = func_pointer ();
+			*result = func_pointer ();
 			break;
 		case 1:
-			result = func_pointer (syscall_get_arg(if_, 1));
+			*result = func_pointer (syscall_get_arg(if_, 1));
 			break;
 		case 2:
-			result = func_pointer (syscall_get_arg(if_, 1), syscall_get_arg(if_, 2));
+			*result = func_pointer (syscall_get_arg(if_, 1), syscall_get_arg(if_, 2));
 			break;
 		case 3:
-			result = func_pointer (syscall_get_arg(if_, 1), syscall_get_arg(if_, 2), syscall_get_arg(if_, 3));
+			*result = func_pointer (syscall_get_arg(if_, 1), syscall_get_arg(if_, 2), syscall_get_arg(if_, 3));
 			break;
 		default:
 			/* Error for invalid Number of Arguments */
