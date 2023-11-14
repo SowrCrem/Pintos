@@ -85,10 +85,16 @@ rs_manager_init (struct rs_manager *parent, struct thread *child)
     list_push_back (&parent->children, &rs->child_elem);
 
   list_init (&rs->children);
+  
   rs->thread = child;         /* tid > thread*; will remove later. */
   rs->tid = child->tid;
+
+  hash_init (&rs->file_table, NULL, NULL, NULL);
+  rs->fd_next = 2;  // remove magic number, FD_START
+
   sema_init (&rs->child_load_sema, 0);
   sema_init (&rs->child_exit_sema, 0);
+  
   rs->exit_status = NOT_EXITED;
   rs->error = false;
   rs->load_success = true;
@@ -102,11 +108,13 @@ rs_manager_init (struct rs_manager *parent, struct thread *child)
 void 
 rs_manager_free (struct rs_manager *rs) 
 {
-  /* Update exit status. */
-  // if (rs->error) 
-  //   rs->exit_status = ERROR;
-  // else
-  //   rs->exit_status = SUCCESS;
+  /* Set exit_status to ERROR if exited in error and exit_status still 
+     default, and to SUCCESS if exited and exit_status still default. */
+  if (rs->exit_status == NOT_EXITED)
+    if (rs->error) 
+      rs->exit_status = ERROR;
+    else
+      rs->exit_status = SUCCESS;
 
   /* Increment semaphore to allow parent to return from wait. */
   sema_up (&rs->child_exit_sema);

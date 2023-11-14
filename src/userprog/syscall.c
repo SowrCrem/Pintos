@@ -6,6 +6,12 @@
 #include "../userprog/pagedir.h"
 #include "../threads/vaddr.h"
 #include "../lib/syscall-nr.h"
+#include "filesys/filesys.h"
+#include "filesys/file.h"
+#include "../devices/input.h"
+#include "filesys/filesys.h"
+#include "filesys/file.h"
+#include "../devices/input.h"
 #include <stdio.h>
 #include <syscall-nr.h>
 
@@ -16,6 +22,16 @@
 
 #define STDIN_FILENO 0
 #define STDOUT_FILENO 1
+
+/* Lock used by (filesys) syscall synchronisation. */
+static struct lock filesys_lock;
+
+/* Initialises filesys_lock. */
+void
+filesys_lock_init (void)
+{
+	lock_init (&filesys_lock);
+}
 
 /* Memory access functions. */
 static int     get_user            (const uint8_t *uaddr);
@@ -93,6 +109,8 @@ get_user_safe (const uint8_t *uaddr)
 {
 	if (is_user_vaddr (uaddr)) /* Checks if UADDR is below PHYS_BASE */
 		return get_user (uaddr);
+	
+	exit (ERROR);
 	return ERROR;
 }
 
@@ -198,17 +216,6 @@ terminate_userprog (int status)
 	printf ("(terminate_userprog) should not reach this point\n");
 }
 
-static void
-store_result (uint32_t result_ptr, struct intr_frame *if_) {
-	/* De-Reference result_ptr and store it in if_eax */
-	/* TODO: Check if result_ptr is a valid address (is this needed?) */
-	if_->eax = result_ptr;
-}
-
-
-/* Syscall Functions */
-/* TODO: Move to separate file i.e. syscall_func.c, syscall_func.h */
-
 /* Terminates by calling shutdown_power_off(). Seldom used because
 	 you lose information about possible deadlock situations. */
 static void
@@ -277,7 +284,16 @@ wait (pid_t pid)
 static bool
 create (const char *file, unsigned initial_size)
 {
-	return filesys_create (file, initial_size);
+	if (file == NULL)
+	{
+		terminate_userprog (ERROR);
+	}
+
+	lock_acquire (&filesys_lock);
+	bool result = filesys_create (file, initial_size);
+	lock_release (&filesys_lock);
+
+	return result;
 }
 
 /* Deletes the file called file. 
@@ -289,30 +305,126 @@ static bool
 remove (const char *file)
 {
 	if (file == NULL)
+	{
 		return false;
+	}
 
-	return filesys_remove (file);
+	lock_acquire (&filesys_lock);
+	bool result = filesys_remove (file);
+	lock_release (&filesys_lock);
+
+	return result;
 }
 
 static int
-open (const char *file)
+open (const char *file_name)
 {
-	/* TODO */
-	return 0;
+	if (file_name == NULL)
+	{
+		return ERROR;
+	}
+
+	/* Add file and corresponding fd to process's hash table. */
+	lock_acquire (&filesys_lock);
+	struct file *file = filesys_open (file_name);
+	
+	/* Return error if file could not be opened. */
+	if (file == NULL)
+	{
+		return ERROR;
+	}
+
+	struct rs_manager *rs = thread_current ()->rs_manager;
+	
+	int fd = rs->fd_next;
+
+	/* Dynamically allocate the file entry. */
+	struct file_entry *entry = malloc (sizeof (struct file_entry));
+
+	entry->file = file;
+	entry->fd = fd;
+
+	/* Increment fd current pointer in process. */
+	rs->fd_next = fd++;
+
+	/* Insert file entry into the file table. */
+	hash_insert (&rs->file_table, &entry->file_elem);
+
+	lock_release (&filesys_lock);
+
+	return fd;
+}
+
+/* Helper function to return file_entry for corresponding fd. */
+struct file_entry *
+get_file_entry (int fd)
+{
+	struct rs_manager *rs = thread_current ()->rs_manager;
+
+	/* Get file from fd value */
+	struct file_entry *target_entry;
+	target_entry->fd = fd;
+
+	struct hash *table = &rs->file_table;
+	struct hash_elem *elem = hash_find (table, &target_entry->file_elem);
+	
+	struct file_entry *file_entry = 
+											hash_entry (elem, struct file_entry, file_elem);
+
+	return file_entry;
+
 }
 
 static int
 filesize (int fd)
 {
-	/* TODO */
-	return 0;
+	struct file *file = get_file_entry (fd)->file;
+
+	lock_acquire (&filesys_lock);
+	int result = file_length (file);
+	lock_release (&filesys_lock);
+
+	return result;
 }
 
 static int
 read (int fd, void *buffer, unsigned size)
 {
-	/* TODO */
-	return 0;
+	if (buffer == NULL || !is_user_vaddr (buffer + size))
+	{
+		terminate_userprog (ERROR);
+		printf ("(syscall-read) should not reach this point\n");
+	}
+
+	if (fd == STDOUT_FILENO)
+	{
+		/* Cannot read from standard output. */
+		return;
+	} 
+	else if (fd == STDIN_FILENO)
+	{
+		/* Can read from standard input. */
+		for (unsigned i = 0; i < size; i++) 
+		{
+			((uint8_t *) buffer) [i] = input_getc ();
+		}
+		return size;
+	}
+	else
+	{
+		struct file *file = get_file_entry (fd)->file;
+
+		if (file == NULL)
+		{
+			return ERROR;
+		}
+
+		lock_acquire (&filesys_lock);
+		int result = file_read (file, buffer, size);
+		lock_release (&filesys_lock);
+
+		return result;
+	}
 }
 
 static int
@@ -322,7 +434,7 @@ write (int fd, const void *buffer, unsigned size)
 	{
 		if (fd == STDOUT_FILENO)
 		{
-			putbuf((char*) buffer, size);
+			putbuf ((char*) buffer, size);
 		}
 	}
 	return 0;
@@ -331,20 +443,41 @@ write (int fd, const void *buffer, unsigned size)
 static void
 seek (int fd, unsigned position)
 {
-	/* TODO */
+	struct file *file = get_file_entry (fd)->file;
+	
+	lock_acquire (&filesys_lock);
+	file_seek (file, (off_t) position);
+	lock_release (&filesys_lock);
 }
 
 static unsigned
 tell (int fd)
 {
-	/* TODO */
-	return 0;
+	struct file *file = get_file_entry (fd)->file;
+
+	lock_acquire (&filesys_lock);
+	unsigned result = file_tell (file);	
+	lock_release (&filesys_lock);
+	
+	return result;
 }
 
 static void
 close (int fd)
 {
-	/* TODO */
+	struct rs_manager *rs = thread_current ()->rs_manager;
+	struct file_entry *file_entry = get_file_entry (fd);
+
+	/* Call file_close on file */
+	file_close (file_entry->file);
+
+	/* Remove entry from table */
+	hash_delete (&rs->file_table, &file_entry->file);
+
+	/* Decrement fd_current - maybe not necessary */
+
+	/* Free entry cause malloced */
+	free (file_entry);
 }
 
 
@@ -359,7 +492,8 @@ syscall_halt (UNUSED struct intr_frame *if_)
 static void
 syscall_exit (UNUSED struct intr_frame *if_)
 {
-	int status;
+	int status = syscall_get_arg (if_, 1);
+	//int status = syscall_get_arg (if_, 0);
 	exit (status);
 }
 
@@ -367,125 +501,124 @@ static void
 syscall_exec (struct intr_frame *if_)
 {
 	/* TODO: Retrieve cmd_line from if_ or an argv array */
-	char *cmd_line;
+	char *cmd_line = syscall_get_arg (if_, 1);
 
 	/* Get result and store it in if_->eax */
 	pid_t result = exec (cmd_line);
-	store_result(&result, if_);
+	if_->eax = result;
 }
 
 static void
 syscall_wait (struct intr_frame *if_)
 {
 	/* TODO: Retrieve pid from if_ or an argv array */
-	pid_t pid;
+	pid_t pid = syscall_get_arg (if_, 1);
 
 	/* Get result and store it in if_->eax */
 	int result = wait (pid);
-	store_result(&result, if_);
+	if_->eax = result;
 }
 
 static void
 syscall_create (struct intr_frame *if_)
 {
 	/* TODO: Retrieve file, initial_size from if_ or an argv array */
-	char *file;
-	unsigned initial_size;
+	char *file = syscall_get_arg (if_, 1);
+	unsigned initial_size = syscall_get_arg (if_, 2);
 
 	/* Get result and store it in if_->eax */
 	bool result = create (file, initial_size);
-	store_result(&result, if_);
+	if_->eax = result;
 }
 
 static void
 syscall_remove (struct intr_frame *if_)
 {
 	/* TODO: Retrieve file from if_ or an argv array */
-	char *file;
+	char *file = syscall_get_arg (if_, 1);
 
 	/* Get result and store it in if_->eax */
 	int result = remove (file);
-	store_result(&result, if_);
+	if_->eax = result;
 }
 
 static void
 syscall_open (struct intr_frame *if_)
 {
 	/* TODO: Retrieve file from if_ or an argv array */
-	char *file;
+	char *file = syscall_get_arg (if_, 1);
 
 	/* Get result and store it in if_->eax */
 	int result = open (file);
-	store_result(&result, if_);
+	if_->eax = result;
 }
 
 static void
 syscall_filesize (struct intr_frame *if_)
 {
 	/* TODO: Retrieve fd from if_ or an argv array */
-	int fd;
+	int fd = syscall_get_arg (if_, 1);
 
 	/* Get result and store it in if_->eax */
 	int result = filesize (fd);
-	store_result(&result, if_);
+	if_->eax = result;
 }
 
 static void
 syscall_read (struct intr_frame *if_)
 {
 	/* TODO: Retrieve fd, buffer, size from if_ or an argv array */
-	int fd;
-	void *buffer;
-	unsigned size;
+	int fd = syscall_get_arg (if_, 1);
+	void *buffer = syscall_get_arg (if_, 2);
+	unsigned size = syscall_get_arg (if_, 3);
 
 	/* Get result and store it in if_->eax */
 	int result = read (fd, buffer, size);
-	store_result(&result, if_);
+	if_->eax = result;
 }
 
 static void
 syscall_write (struct intr_frame *if_)
 {
 	/* Retrieve fd, buffer, size from if_ or an argv array */
-	int fd = syscall_get_arg(if_, 1);
-	void *buffer = syscall_get_arg(if_, 2);
-	unsigned size = syscall_get_arg(if_, 3);
+	int fd = syscall_get_arg (if_, 1);
+	void *buffer = syscall_get_arg (if_, 2);
+	unsigned size = syscall_get_arg (if_, 3);
 
 	/* Get result and store it in if_->eax */
 	int result = write (fd, buffer, size);
 	if_->eax = result;
-	//store_result(&result, if_);
 }
 
 static void
 syscall_seek (UNUSED struct intr_frame *if_)
 {
-	/* TODO: Retrieve fd, buffer, size from if_ or an argv array */
-	int fd;
-	unsigned position;
+	/* TODO: Retrieve fd, buffer, size from if_ or an argv array. */
+	int fd = syscall_get_arg (if_, 1);
+	unsigned position = syscall_get_arg (if_, 2);
 
-	/* Execute seek syscall with arguments */
+	/* Execute seek syscall with arguments. */
 	seek (fd, position);
 }
 
 static void
 syscall_tell (struct intr_frame *if_)
 {
-	/* TODO: Retrieve fd, buffer, size from if_ or an argv array */
-	int fd;
+	/* Retrieve fd from if_ or an argv array. */
+	int fd = syscall_get_arg (if_, 1);
 
-	/* Get result and store it in if_->eax */
+	/* Get result and store it in if_->eax. */
 	unsigned result = tell (fd);
-	store_result(&result, if_);
+	if_->eax = result;
 }
 
 static void
 syscall_close (UNUSED struct intr_frame *if_)
 {
-	/* TODO: Retrieve fd, buffer, size from if_ or an argv array */
-	int fd;
+	/* TODO: Retrieve fd, buffer, size from if_ or an argv array. */
+	int fd = syscall_get_arg (if_, 1);
 
-	/* Execute close syscall with arguments */
+	/* Execute close syscall with arguments. */
 	close (fd);
 }
 
