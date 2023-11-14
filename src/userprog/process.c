@@ -156,15 +156,13 @@ start_process (void *file_name_)
   struct process *p = thread_current ()->process;
   p->loaded = success;
 
+  palloc_free_page (file_name);
   if (!success) 
   {
-    // palloc_free_page (file_name);
     p->exit_status = ERROR;
-    
-    // sema_up (&p->load_sema);
+    sema_up (&p->load_sema);
     thread_exit ();
   }
-  palloc_free_page (file_name);
 
   /* Push words to top of stack */
   for (int i = argc - 1; i >= 0; i--) 
@@ -200,9 +198,6 @@ start_process (void *file_name_)
   push_pointer_to_stack(&if_.esp, NULL);
 
   sema_up (&p->load_sema);
-
-  // /* If load failed, quit. */
-  // palloc_free_page (file_name);
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
