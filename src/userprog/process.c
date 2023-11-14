@@ -154,11 +154,13 @@ start_process (void *file_name_)
 
   /* Parent process if child process is loaded successfully or not */
   struct process *p = thread_current ()->process;
+
   p->loaded = success;
 
-  palloc_free_page (file_name);
   if (!success) 
   {
+    palloc_free_page (file_name);
+
     p->exit_status = ERROR;
     sema_up (&p->load_sema);
     thread_exit ();
@@ -199,6 +201,8 @@ start_process (void *file_name_)
 
   sema_up (&p->load_sema);
 
+  palloc_free_page (file_name);
+
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
      threads/intr-stubs.S).  Because intr_exit takes all of its
@@ -222,39 +226,41 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid) 
 {
-  struct process *calling_p = thread_current ()->process;
-  if (calling_p == NULL)
+  struct process *parent = thread_current ()->process;
+  if (parent == NULL)
     return ERROR;
 
   /* Search through the process struct with the same child_tid */
-  struct list *children = &calling_p->children;
   struct process *child;
-  for (struct list_elem *e = list_begin (children); e != list_end (children); 
+  struct list_elem *e;
+  for (e = list_begin (&parent->children); e != list_end (&parent->children); 
                                                     e = list_next (e))
   {
     child = list_entry (e, struct process, child_elem);
     /* Match corresponding child_tid to the child thread */
-    if (child->thread->tid == child_tid)
+    if (child->pid == child_tid)
       break;
 
     child = NULL;
   }
+
   
   /* Check if child exists */
-  if (child == NULL)
-    return ERROR;
+  if (child == NULL) 
+    return ERROR; /* TODO: Not recursing through child properly */
+
 
   /* Block parent process from running */
   sema_down (&child->exit_sema);
 
   int exit_status = child->exit_status;
 
-
   list_remove (&child->child_elem);
 
   free (child);
 
   return exit_status;
+
 
 }
 
@@ -300,11 +306,14 @@ void process_init (struct thread *t, struct process *parent)
   p->thread = t;
 
   p->parent_process = parent;
-  list_init (&p->children);
   if (parent != NULL)
   {
     list_push_back (&parent->children, &p->child_elem);
   }
+  list_init (&p->children);
+
+  p->pid = (pid_t) t->tid;
+
   
   p->loaded = false;
   sema_init (&p->load_sema, 0);

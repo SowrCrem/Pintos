@@ -184,18 +184,17 @@ static void
 terminate_userprog (int status)
 {
 	struct thread *cur = thread_current();
+	struct process *p  = cur->process;
 
 	/* Send exit status to kernel. */
-	cur->process->exit_status = status;
-
-	// printf ("%s current tid %d\n", cur->name, cur->tid);
+	p->exit_status = status;
 
 	/* Output termination message (only if it is not a kernel thread). */
 	printf ("%s: exit(%d)\n", cur->name, status);
 
+
 	/* Terminate current process. */
 	thread_exit ();
-	printf ("(terminate_userprog) should not reach this point\n");
 }
 
 // static void
@@ -236,7 +235,6 @@ exit (int status)
 static pid_t
 exec (const char *cmd_line)
 {
-	// printf ("Exec arg is %s", cmd_line);
 
 	/* Runs executable of given cmd line file */
 	pid_t pid = (pid_t) process_execute (cmd_line);
@@ -259,7 +257,7 @@ exec (const char *cmd_line)
 	{
 		child = list_entry (e, struct process, child_elem);
 		/* Match corresponding child_tid to the child thread */
-		if (child->thread->tid == (tid_t) pid)
+		if (child->pid ==  pid)
 			break;
 		child = NULL;
 	}
@@ -386,45 +384,49 @@ syscall_exit (struct intr_frame *if_)
 static void
 syscall_exec (struct intr_frame *if_)
 {
-	/* TODO: Retrieve cmd_line from if_ or an argv array */
 	char *cmd_line = syscall_get_arg (if_, 1);
 
 	/* Get result and store it in if_->eax */
 	pid_t result = exec (cmd_line);
-	//store_result(&result, if_);
+	
+	if_->eax = result;
 }
 
 static void
 syscall_wait (struct intr_frame *if_)
 {
 	/* TODO: Retrieve pid from if_ or an argv array */
-	pid_t pid;
+	pid_t pid = syscall_get_arg (if_, 1);
 
 	/* Get result and store it in if_->eax */
 	int result = wait (pid);
-	//
+	
+	if_->eax = result;
 }
 
 static void
 syscall_create (struct intr_frame *if_)
 {
 	/* TODO: Retrieve file, initial_size from if_ or an argv array */
-	char *file;
-	unsigned initial_size;
+	char *file = syscall_get_arg (if_, 1);
+	unsigned initial_size = syscall_get_arg (if_, 2);
 
 	/* Get result and store it in if_->eax */
 	bool result = create (file, initial_size);
-	//
+	
+	if_->eax = result;
 }
 
 static void
 syscall_remove (struct intr_frame *if_)
 {
 	/* TODO: Retrieve file from if_ or an argv array */
-	char *file;
+	char *file = syscall_get_arg (if_, 1);
 
 	/* Get result and store it in if_->eax */
 	int result = remove (file);
+
+	if_->eax = result;
 	//
 }
 
@@ -432,35 +434,38 @@ static void
 syscall_open (struct intr_frame *if_)
 {
 	/* TODO: Retrieve file from if_ or an argv array */
-	char *file;
+	char *file = syscall_get_arg (if_, 1);
 
 	/* Get result and store it in if_->eax */
 	int result = open (file);
-	//
+	
+	if_->eax = result;
 }
 
 static void
 syscall_filesize (struct intr_frame *if_)
 {
 	/* TODO: Retrieve fd from if_ or an argv array */
-	int fd;
+	int fd = syscall_get_arg (if_, 1);
 
 	/* Get result and store it in if_->eax */
 	int result = filesize (fd);
-	//
+	
+	if_->eax = result;
 }
 
 static void
 syscall_read (struct intr_frame *if_)
 {
 	/* TODO: Retrieve fd, buffer, size from if_ or an argv array */
-	int fd;
-	void *buffer;
-	unsigned size;
+	int fd = syscall_get_arg (if_, 1);
+	void *buffer = syscall_get_arg (if_, 2);
+	unsigned size = syscall_get_arg (if_, 3);
 
 	/* Get result and store it in if_->eax */
 	int result = read (fd, buffer, size);
-	//
+	
+	if_->eax = result;
 }
 
 static void
@@ -473,36 +478,39 @@ syscall_write (struct intr_frame *if_)
 
 	/* Get result and store it in if_->eax */
 	int result = write (fd, buffer, size);
-	//
+	
+	if_->eax = result;
 }
 
 static void
-syscall_seek (UNUSED struct intr_frame *if_)
+syscall_seek (struct intr_frame *if_)
 {
 	/* TODO: Retrieve fd, buffer, size from if_ or an argv array */
-	int fd;
-	unsigned position;
+	int fd = syscall_get_arg (if_, 1);
+	unsigned position = syscall_get_arg (if_, 2);
 
 	/* Execute seek syscall with arguments */
 	seek (fd, position);
+
 }
 
 static void
 syscall_tell (struct intr_frame *if_)
 {
 	/* TODO: Retrieve fd, buffer, size from if_ or an argv array */
-	int fd;
+	int fd = syscall_get_arg (if_, 1);
 
 	/* Get result and store it in if_->eax */
 	unsigned result = tell (fd);
-	//
+	
+	if_->eax = result;
 }
 
 static void
-syscall_close (UNUSED struct intr_frame *if_)
+syscall_close (struct intr_frame *if_)
 {
 	/* TODO: Retrieve fd, buffer, size from if_ or an argv array */
-	int fd;
+	int fd = syscall_get_arg (if_, 1);
 
 	/* Execute close syscall with arguments */
 	close (fd);
