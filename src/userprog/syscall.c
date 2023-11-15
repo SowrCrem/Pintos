@@ -298,7 +298,16 @@ wait (pid_t pid)
 static bool
 create (const char *file, unsigned initial_size)
 {
-	return filesys_create (file, initial_size);
+	struct process *p = thread_current ()->process;
+
+	if (file == NULL)
+		return false;
+
+	lock_acquire (&p->filesys_lock);
+	bool result = filesys_create (file, initial_size);
+	lock_release (&p->filesys_lock);
+
+	return result;
 }
 
 /* Deletes the file called file. 
@@ -309,10 +318,16 @@ create (const char *file, unsigned initial_size)
 static bool
 remove (const char *file)
 {
+	struct process *p = thread_current ()->process;
+
 	if (file == NULL)
 		return false;
 
-	return filesys_remove (file);
+	lock_acquire (&p->filesys_lock);
+	bool result = filesys_remove (file);
+	lock_release (&p->filesys_lock);
+
+	return result;
 }
 
 static int
@@ -345,15 +360,15 @@ open (const char *file)
 	/* Dynamically allocate the file entry */
 	struct file_entry *entry = malloc (sizeof (struct file_entry));
 
-	if (entry == NULL)
-	{
-		lock_acquire (&p->filesys_lock);
-		file_close (file);
-		lock_release (&p->filesys_lock);
+	// if (entry == NULL)
+	// {
+	// 	lock_acquire (&p->filesys_lock);
+	// 	file_close (file);
+	// 	lock_release (&p->filesys_lock);
 
-		terminate_userprog (ERROR);
-		NOT_REACHED ();
-	}
+	// 	terminate_userprog (ERROR);
+	// 	NOT_REACHED ();
+	// }
 
 	entry->file = f;
 	entry->fd   = p->fd_new;
@@ -364,7 +379,6 @@ open (const char *file)
 	hash_insert (&p->file_table, &entry->hash_elem);
 
 	return p->fd_new;
-
 }
 
 
@@ -438,21 +452,25 @@ write (int fd, const void *buffer, unsigned size)
 	return 0;
 }
 
-static void
-seek (int fd, unsigned position)
-{
-	struct file *file = get_file_entry (fd);
+// static void
+// seek (int fd, unsigned position)
+// {
+// 	struct file_entry *e = get_file_entry (fd);
+// 	if (file == NULL)
+// 	{
+// 		return -1;
+// 	}
 
-	file_seek (file, (off_t) position);
-}
+// 	file_seek (file, (off_t) position);
+// }
 
-static unsigned
-tell (int fd)
-{
-	struct file *file = get_file_entry (fd);
+// static unsigned
+// tell (int fd)
+// {
+// 	struct file_entry *e = get_file_entry (fd);
 
-	file_tell (fd);
-}
+// 	file_tell (fd);
+// }
 
 static void
 close (int fd)
@@ -605,8 +623,18 @@ syscall_seek (struct intr_frame *if_)
 	int fd = syscall_get_arg (if_, 1);
 	unsigned position = syscall_get_arg (if_, 2);
 
+	struct process *cur = thread_current ();
+	struct file_entry *e = get_file_entry (fd);
+	if (e == NULL)
+	{
+		if_->eax = ERROR;
+		return;
+	}
+
 	/* Execute seek syscall with arguments */
-	seek (fd, position);
+	lock_acquire (&cur->filesys_lock);
+	file_seek (fd, position);
+	lock_release (&cur->filesys_lock);
 
 }
 
@@ -617,8 +645,18 @@ syscall_tell (struct intr_frame *if_)
 	int fd = syscall_get_arg (if_, 1);
 
 	/* Get result and store it in if_->eax */
-	unsigned result = tell (fd);
-	
+	struct process *cur = thread_current ();
+	struct file_entry *e = get_file_entry (fd);
+	if (e == NULL)
+	{
+		if_->eax = ERROR;
+		return;
+	}
+
+	/* Execute seek syscall with arguments */
+	lock_acquire (&cur->filesys_lock);
+	unsigned result = file_tell (fd);
+	lock_release (&cur->filesys_lock);
 	if_->eax = result;
 }
 
