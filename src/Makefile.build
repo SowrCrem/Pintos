@@ -48,22 +48,24 @@ lib_SRC += lib/ustar.c			# Unix standard tar format utilities.
 
 # Kernel-specific library code.
 lib/kernel_SRC  = lib/kernel/debug.c	# Debug helpers.
-lib/kernel_SRC += lib/kernel/list.c	# Doubly-linked lists.
+lib/kernel_SRC += lib/kernel/list.c	    # Doubly-linked lists.
 lib/kernel_SRC += lib/kernel/bitmap.c	# Bitmaps.
-lib/kernel_SRC += lib/kernel/hash.c	# Hash tables.
+lib/kernel_SRC += lib/kernel/hash.c	    # Hash tables.
 lib/kernel_SRC += lib/kernel/console.c	# printf(), putchar().
 
 # User process code.
-userprog_SRC  = userprog/process.c	# Process loading.
-userprog_SRC += userprog/pagedir.c	# Page directories.
-userprog_SRC += userprog/exception.c	# User exception handler.
-userprog_SRC += userprog/syscall.c	# System call handler.
-userprog_SRC += userprog/gdt.c		# GDT initialization.
-userprog_SRC += userprog/tss.c		# TSS management.
+userprog_SRC  = userprog/process.c	     # Process loading.
+userprog_SRC += userprog/pagedir.c	     # Page directories.
+userprog_SRC += userprog/exception.c	 # User exception handler.
+userprog_SRC += userprog/syscall.c	     # System call handler.
+userprog_SRC += userprog/gdt.c		     # GDT initialization.
+userprog_SRC += userprog/tss.c		     # TSS management.
+userprog_SRC += userprog/syscall-func.c	 # System call functionality.
+userprog_SRC += userprog/memory-access.c # Memory access.
 
 # Virtual memory code.
 vm_SRC += devices/swap.c		# Swap block manager.
-#vm_SRC = vm/file.c			# Some other file.
+#vm_SRC = vm/file.c			    # Some other file.
 
 # Filesystem code.
 filesys_SRC  = filesys/filesys.c	# Filesystem core.
