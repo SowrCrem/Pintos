@@ -755,13 +755,10 @@ install_page (void *upage, void *kpage, bool writable)
 
 void file_action_func (struct hash_elem *e, void * UNUSED) {
 
-  struct process *p = thread_current ()->process;
 
   struct file_entry *f_entry = hash_entry (e, struct file_entry, hash_elem);
 
-  lock_acquire (&p->filesys_lock);
   file_close (f_entry->file);
-  lock_release (&p->filesys_lock);
 
   free (f_entry);
 
