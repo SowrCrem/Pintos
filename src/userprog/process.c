@@ -254,7 +254,7 @@ process_wait (tid_t child_tid)
 
   /* Check if child exists */
   if (child == NULL) 
-    return ERROR; /* TODO: Not recursing through child properly */
+    return 81; /* TODO: Not recursing through child properly */
 
 
   /* Block parent process from running */
