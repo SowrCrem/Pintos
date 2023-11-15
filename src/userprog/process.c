@@ -157,10 +157,9 @@ start_process (void *file_name_)
 
   p->loaded = success;
 
+  palloc_free_page (file_name);
   if (!success) 
   {
-    palloc_free_page (file_name);
-
     p->exit_status = ERROR;
     sema_up (&p->load_sema);
     thread_exit ();
@@ -201,7 +200,6 @@ start_process (void *file_name_)
 
   sema_up (&p->load_sema);
 
-  palloc_free_page (file_name);
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in

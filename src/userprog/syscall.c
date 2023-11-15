@@ -302,7 +302,7 @@ create (const char *file, unsigned initial_size)
 
 	if (file == NULL)
 	{
-		return false;
+		terminate_userprog(ERROR);
 	}
 
 	lock_acquire (&p->filesys_lock);
@@ -381,11 +381,14 @@ filesize (int fd)
 	struct process *p = thread_current ()->process;
 
 	struct file_entry *f = get_file_entry (fd);
-	if (f == NULL)
+	if (f->file == NULL)
 	{
 		return ERROR;
 	}
+	lock_acquire(&p->filesys_lock);
 	int result = file_length (f->file);
+	lock_release(&p->filesys_lock);
+
 	return result;
 
 }
@@ -420,7 +423,7 @@ read (int fd, void *buffer, unsigned size)
 		struct file_entry *e = get_file_entry (fd);
 		if (e == NULL)
 		{
-			return SUCCESS;
+			return SUCCESS; /* TODO: Allows for file_entry to work */
 		}
 		struct file *file = e->file;
 
@@ -739,16 +742,13 @@ get_file_entry (int fd)
 	struct file_entry target_entry;
 	target_entry.fd = fd;
 
-	struct hash *table = &p->file_table;
-	struct hash_elem *elem = hash_find (table, &target_entry.hash_elem);
-	
+	struct hash_elem *elem = hash_find (&p->file_table, &target_entry.hash_elem);
 	
 
 	if (elem == NULL)
 	{
 		return NULL;
 	}
-	struct file_entry *file_entry = hash_entry (elem, struct file_entry, hash_elem);
-	return file_entry;
+	return hash_entry (elem, struct file_entry, hash_elem);
 
 }
