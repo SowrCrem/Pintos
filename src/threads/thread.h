@@ -4,6 +4,9 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
+#include "../userprog/process.h"
+
+#define USERPROG 1      /* TODO: For testing purposes - ask UTA */
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -93,10 +96,11 @@ struct thread
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
 
-		/* #ifdef USERPROG */
+		#ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
-		/* #endif */
+    struct rs_manager *rs_manager;      /* Pointer to thread's rs_manager. */
+		#endif
 
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */

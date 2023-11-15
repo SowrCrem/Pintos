@@ -1,10 +1,4 @@
-#include "userprog/process.h"
-#include <debug.h>
-#include <inttypes.h>
-#include <round.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+#include "../userprog/process.h"
 #include "../userprog/gdt.h"
 #include "../userprog/pagedir.h"
 #include "../userprog/tss.h"
@@ -17,13 +11,22 @@
 #include "../threads/palloc.h"
 #include "../threads/thread.h"
 #include "../threads/vaddr.h"
+#include <debug.h>
+#include <inttypes.h>
+#include <round.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include "../lib/string.h"
+
+#define MAX_CMDLINE_LEN 128
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
 
-/* Function to get number of arguments in a command line string */
-static int get_no_args(const char *command_line) 
- {
+/* Returns number of arguments in COMMAND_LINE string. */
+static int get_no_of_args (const char *command_line) 
+{
   int no_chars = 1;
   int no_args = 0;
 
@@ -31,56 +34,254 @@ static int get_no_args(const char *command_line)
   bool in_space = false;
 
   while (cur != '\0')
-   {
+  {
     if (cur != ' ')
-     {
+    {
       no_chars++;
       if (!in_space)
-       {
+      {
         no_args++;
         in_space = true;
-       }
-     } else 
-      {
-        in_space = false;
       }
+    } else 
+    {
+      in_space = false;
+    }
       cur = *(++command_line);
-   }
-   return no_args;
- }
+  }
+  return no_args;
+}
 
-
-/* Function to divide command line into words at spaces */
-static void parse_arguments(const char *command_line, char **args, int argc)
+/* Tokenizes COMMAND_LINE into words. */
+static void parse_arguments (const char *command_line, char **args, int argc)
 {
   char *token;
   char *save_ptr;
+  int i = 0;  /* Initialise argument count. */
 
-  int i = 0; /* Initialise argument count */
-
-  /* Use strtok_r to split the command line into words */
-  for (token = strtok_r((char *)command_line, " ", &save_ptr); token != NULL; token = strtok_r(NULL, " ", &save_ptr)) 
+  /* Split the command line into words. */
+  for (token = strtok_r ((char *) command_line, " ", &save_ptr); 
+       token != NULL; token = strtok_r(NULL, " ", &save_ptr)) 
   {
-    int len = strlen(token) + 1;
-    args[i] = malloc(len * sizeof(char));
-    strlcpy(args[i], token, len);
+    int len = strlen (token) + 1;
+    args[i] = malloc (len * sizeof (char));
+    strlcpy (args[i], token, len);
     i++;
   }
-  args[argc] = NULL; /* Set the last argument to NULL */
 
+  args[argc] = NULL; /* Set the last argument to NULL. */
 }
 
+/* Returns hash value for file FILE, which is just a file's FD as it is unique
+   to the file. */
+unsigned
+file_table_hash (const struct hash_elem *e_, void *aux UNUSED) 
+{
+  const struct file_entry *e = hash_entry (e_, struct file_entry, file_elem);
+  return e->fd;
+}
 
+/* Returns true if entry X precedes entry Y in file table. */
+bool
+file_table_less (const struct hash_elem *x_, const struct hash_elem *y_,
+                 void *aux UNUSED)
+{
+  const struct file_entry *x = hash_entry (x_, struct file_entry, file_elem);
+  const struct file_entry *y = hash_entry (y_, struct file_entry, file_elem);
+  
+  return x->fd < y->fd;
+}
+
+/* Closes the file and frees the file_entry corresponding to hash_elem E. */
+void 
+file_table_destroy_func (struct hash_elem *e_, void *aux UNUSED) 
+{
+  /* TODO: Check if current process holds filesys_lock. */
+  
+  struct file_entry *e = hash_entry (e_, struct file_entry, file_elem);
+  file_close (e->file);
+  free (e);
+}
+
+/* Initializes thread CHILD's rs_manager as a child of PARENT's
+   rs_manager.
+   
+   Requires PARENT's rs_manager pointer and CHILD thread pointer. */
+void
+rs_manager_init (struct rs_manager *parent, struct thread *child)
+{
+  /* Allocate space on the heap for the parent. */
+  struct rs_manager *rs = malloc (sizeof (struct rs_manager));
+
+  rs->parent_rs_manager = parent;
+  /* Push child onto parent's children list, if parent present. */
+  if (parent != NULL)
+    list_push_back (&parent->children, &rs->child_elem);
+
+  list_init (&rs->children);
+  
+  rs->thread = child;         /* tid > thread*; will remove later. */
+  rs->tid = child->tid;
+
+  hash_init (&rs->file_table, file_table_hash, file_table_less, NULL);
+  lock_init (&rs->file_table_lock);
+  rs->executing = NULL;
+  rs->fd_next = 2;  // remove magic number, FD_START
+
+  sema_init (&rs->child_load_sema, 0);
+  sema_init (&rs->child_exit_sema, 0);
+  
+  rs->exit_status = NOT_EXITED;
+  rs->running = true;
+  rs->load_success = true;
+
+  /* Update child rs_manager pointer. */
+  child->rs_manager = rs; 
+}
+
+/* Runs on process exit. Frees rs_manager RS's associated memory if no 
+   other references to RS are found.  */
+void 
+rs_manager_free (struct rs_manager *rs) 
+{
+  /* Set exit_status to ERROR if exited in error and exit_status still 
+     default, and to SUCCESS if exited and exit_status still default. */
+  if (rs->running)
+    // if (rs->error) 
+    //   rs->exit_status = ERROR;
+    // else
+      rs->exit_status = SUCCESS;
+
+  rs->running = false;
+
+  /* Increment semaphore to allow parent to return from wait. */
+  sema_up (&rs->child_exit_sema);
+  // printf ("(rs_manager_free) increment exit sema for %s\n", rs->thread->name);
+
+  if (rs->parent_rs_manager->thread != NULL) 
+  {
+    /* Free parent rs_manager if RS parent process has exited. */
+    if (!rs->parent_rs_manager->running)
+    {
+      rs_manager_free (rs->parent_rs_manager);
+    } else /* Don't free any memory if parent process is alive. */
+    {
+      // printf ("(rs_manager_free) don't free for %s\n", rs->thread->name);
+      return;
+    }
+  }
+  
+  /* Reaches this point if parent_rs_manager points to exited thread. */
+
+  /* Empty children list and free their respective rs_manager if child
+     processes are not running. */
+  while (!list_empty (&rs->children))
+  {
+    struct list_elem *e = list_pop_front (&rs->children);
+    struct rs_manager *child = list_entry (e, struct rs_manager, child_elem);
+
+    if (!child->running) 
+    {
+      /* If child process is not running, free its rs_manager. */
+      free (child);
+      // rs_manager_free (child);
+
+    } else 
+    {
+      /* Set child's parent_rs_manager to NULL. */
+      child->parent_rs_manager = NULL;
+    }
+  }
+
+  /* Free the file descriptor table. */
+  lock_acquire (&filesys_lock);
+  file_close (rs->executing);
+  hash_destroy (&rs->file_table, &file_table_destroy_func);
+  lock_release (&filesys_lock);
+
+  if (&rs->file_table == NULL)
+    printf ("(rs_manager_free) hash table pointer is NULL\n");
+
+  /* Finally, deallocate original rs_manager memory. */
+  free (rs);
+}
+
+/* Returns file_entry pointer for corresponding fd. 
+
+   Returns NULL if not found */
+struct file_entry *
+file_entry_lookup (int fd)
+{
+  // printf ("(file_entry_lookup) entered\n");
+
+  struct hash table = thread_current ()->rs_manager->file_table;
+  struct hash_elem *e;
+
+	/* Get file from fd value. */
+	struct file_entry entry;
+	entry.fd = fd;
+
+  // printf ("(file_entry_lookup) entered, about to hash_find\n");
+
+	e = hash_find (&table, &entry.file_elem);
+	
+	if (e == NULL) 
+	{
+		// printf ("(file_entry_lookup) hash_elem not found\n");
+		return NULL;
+	}
+
+	return hash_entry (e, struct file_entry, file_elem);
+}
+
+/* Returns pointer to child rs_manager, given parent process pointer 
+   and child process TID. 
+   
+   Returns NULL if not found. */
+struct rs_manager*
+get_child (struct thread *parent, tid_t child_tid)
+{
+  // printf ("(get_child) entered, try find %d\n", child_tid);
+
+  struct list *children = &parent->rs_manager->children;
+
+  if (list_empty (children)) 
+  {
+    // printf ("(get_child) FAIL child not found\n");
+    return NULL;
+  }
+
+  struct rs_manager *child_rs_manager = NULL;
+  struct list_elem *e;
+  for (e = list_begin (children); e != list_end (children); 
+       e = list_next (e))
+  {
+    child_rs_manager = list_entry (e, struct rs_manager, child_elem);
+    /* Match corresponding tid to the child thread. */
+    if (child_rs_manager->tid == child_tid)
+      break;
+    child_rs_manager = NULL;
+  }
+
+  if (child_rs_manager == NULL)
+  {
+    // printf ("(get_child) FAIL child not found\n");
+  } else 
+  {
+    // printf ("(get_child) SUCCESS child id %d found\n", child_rs_manager->tid);
+  }
+
+  return child_rs_manager;
+}
 
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
    before process_execute() returns.  Returns the new process's
    thread id, or TID_ERROR if the thread cannot be created. */
 tid_t
-process_execute (const char *file_name) 
+process_execute (const char *cmd_line) 
 {
-	printf("In process_execute function\n");
-	printf("File Name: %s\n", file_name);
+	// printf ("(process-exec) file name: %s\n", file_name);
 
   char *fn_copy;
   tid_t tid;
@@ -90,132 +291,82 @@ process_execute (const char *file_name)
   fn_copy = palloc_get_page (0);
   if (fn_copy == NULL)
     return TID_ERROR;
-  strlcpy (fn_copy, file_name, PGSIZE);
+  strlcpy (fn_copy, cmd_line, PGSIZE);
 
+  // printf ("(process-exec) reached 1\n");
+  
+  /* Copy cmd_line string so strtok_r can function as intended. */
+  char string_to_tokenize[MAX_CMDLINE_LEN];
+  strlcpy (string_to_tokenize, cmd_line, MAX_CMDLINE_LEN);
   char* save_ptr;
-  char* program_name = strtok_r(file_name, " ", &save_ptr);
-	printf("Program Name: %s\n", program_name);
+  char* program_name = strtok_r (string_to_tokenize, " ", &save_ptr);
 
-  /* Create a new thread to execute FILE_NAME. This is the first item in argv */
+	// printf ("(process-exec) program name: %s\n", program_name);
+
+  /* Create a new thread to execute FILE_NAME (first item in argv). */
   tid = thread_create (program_name, PRI_DEFAULT, start_process, fn_copy);
+
   if (tid == TID_ERROR)
+  {
     palloc_free_page (fn_copy); 
+  }
+
   return tid;
 }
 
-/* Push a string s onto the stack at esp */
-static void 
-push_string_to_stack(void **esp, char *s)
-{
-  int len = strlen(s) + 1;
-  *esp -= len;
-  strlcpy(*esp, s, len);
-}
-
-/* Push an int x onto the stack at esp */
-static void
-push_int_to_stack(void **esp, int x)
-{
-  *esp -= sizeof(int);
-  *((int *) *esp) = x;
-}
-
-/* Push a pointer ptr onto the stack at esp */
-static void 
-push_pointer_to_stack(void **esp, void *ptr)
-{
-  *esp -= sizeof (void *);
-  *((int **) *esp) = (int *) ptr;
-}
-
-/* A thread function that loads a user process and starts it
-   running. */
-static void
-start_process (void *file_name_)
-{
-  char *file_name = file_name_;
-  struct intr_frame if_;
-  bool success;
-
-  /* Initialize interrupt frame and load executable. */
-  memset (&if_, 0, sizeof if_);
-  if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
-  if_.cs = SEL_UCSEG;
-  if_.eflags = FLAG_IF | FLAG_MBS;
-
-	/* Set up argc and args, argv arrays, update interrupt frame */
-  int argc = get_no_args(file_name_); /* Number of arguments */
-  char **args = (char**) malloc(sizeof(char*) * argc);  /* List of string arguments */
-  char **argv = (char**) malloc(sizeof(char*) * argc);  /* List of addresses of each string */
-	parse_arguments(file_name, args, argc);
-
-  success = load (args[0], &if_.eip, &if_.esp);
-
-  /* If load failed, quit. */
-  palloc_free_page (file_name);
-  if (!success) 
-    thread_exit ();
-
-  /* Push words to top of stack */
-  for (int i = argc - 1; i >= 0; i--) 
-   {
-    push_string_to_stack(&if_.esp, args[i]);
-    free(args[i]);
-
-    /* Update argv to have the address of string being pushed to stack */
-    argv[i] = (char *) if_.esp;
-   }
-   free(args);
-
-   /* Word alignment */
-   if_.esp -= ((int) if_.esp % sizeof (void *));
-
-   /* Push null pointer sentinel to stack */
-   push_pointer_to_stack(&if_.esp, NULL);
-
-   /* Push address of each string to stack */
-   for (int i = argc - 1; i >= 0; i--)
-    {
-      push_pointer_to_stack(&if_.esp, argv[i]);
-    }
-    free(argv);
-
-    /* Push argv to stack */
-    push_pointer_to_stack(&if_.esp, if_.esp);
-
-    /* Push argc to stack */
-    push_int_to_stack(&if_.esp, argc);
-
-    /* Push a fake return adress */
-    push_pointer_to_stack(&if_.esp, NULL);
-
-
-  /* Start the user process by simulating a return from an
-     interrupt, implemented by intr_exit (in
-     threads/intr-stubs.S).  Because intr_exit takes all of its
-     arguments on the stack in the form of a `struct intr_frame',
-     we just point the stack pointer (%esp) to our stack frame
-     and jump to it. */
-  asm volatile ("movl %0, %%esp; jmp intr_exit" : : "g" (&if_) : "memory");
-  NOT_REACHED ();
-}
-
-/* Waits for thread TID to die and returns its exit status. 
+/* Waits for thread TID to die and returns its exit status.
+ *
  * If it was terminated by the kernel (i.e. killed due to an exception), 
- * returns -1.  
+ * returns -1.
+ * 
  * If TID is invalid or if it was not a child of the calling process, or if 
  * process_wait() has already been successfully called for the given TID, 
- * returns -1 immediately, without waiting.
- * 
- * This function will be implemented in task 2.
- * For now, it does nothing. */
+ * returns -1 immediately, without waiting. */
 int
-process_wait (tid_t child_tid UNUSED) 
+process_wait (tid_t child_tid) 
 {
-  while (true) {
-	  continue;
-	}
+  struct thread *parent = thread_current ();
+  // printf ("(process_wait) entered, %s (tid %d) waiting on tid %d\n",
+  //         parent->name, parent->tid, child_tid);
+
+  // printf ("(process_wait) get_child about to be called\n");
+
+  /* Search through the rs_manager struct with the same child_tid. */
+  struct rs_manager *child_rs_manager = get_child (parent, child_tid);
+
+  //  printf ("(process_wait) waiting on %s\n", child_rs_manager->thread->name);
+
+  /* Return error if child process does not exist. */
+  if (child_rs_manager == NULL)
+  {
+    //  printf ("(process_wait) ERROR child not found\n");
+    return ERROR;
+  }
+
+  // printf ("(process_wait) get_child returned child tid %d\n", 
+  //         child_rs_manager->tid);
+
+  // printf ("(process_wait) about to decrement exit sema for %s\n", 
+  //         child_rs_manager->thread->name);
+  
+  /* Await termination of child process. */
+  sema_down (&child_rs_manager->child_exit_sema);
+
+  // printf ("(process_wait) just decremented exit sema for %s\n", 
+  //         child_rs_manager->thread->name);
+
+  // printf ("(process_wait) %d exit status is %d\n", child_rs_manager->tid,
+  //         child_rs_manager->exit_status);
+
+  /* Continues only if child process has exited. */
+
+  /* Remove child process from parent's children list. Therefore, 
+     subsequent wait's to the same child will return ERROR. */
+  list_remove (&child_rs_manager->child_elem);
+
+  return child_rs_manager->exit_status;
 }
+
 
 /* Free the current process's resources. */
 void
@@ -223,6 +374,10 @@ process_exit (void)
 {
   struct thread *cur = thread_current ();
   uint32_t *pd;
+
+  /* Increments child_exit_sema so parent process can return from
+     wait. Also frees memory for rs_manager if certain conditions met. */
+  rs_manager_free (cur->rs_manager);
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
@@ -257,6 +412,121 @@ process_activate (void)
      interrupts. */
   tss_update ();
 }
+
+/* Push a string s onto the stack at esp */
+static void 
+push_string_to_stack (void **esp, char *s)
+{
+  int len = strlen(s) + 1;
+  *esp -= len;
+  strlcpy(*esp, s, len);
+}
+
+/* Push an int x onto the stack at esp */
+static void
+push_int_to_stack (void **esp, int x)
+{
+  *esp -= sizeof (int);
+  *((int *) *esp) = x;
+}
+
+/* Push a pointer ptr onto the stack at esp */
+static void 
+push_pointer_to_stack (void **esp, void *ptr)
+{
+  *esp -= sizeof (void *);
+  *((int **) *esp) = (int *) ptr;
+}
+
+/* A thread function that loads a user process and starts it
+   running. */
+static void
+start_process (void *file_name_)
+{
+	// printf("(start_process) entered \n");
+  char *file_name = file_name_;
+  struct intr_frame if_;
+  bool success;
+
+  /* Initialize interrupt frame and load executable. */
+  memset (&if_, 0, sizeof if_);
+  if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
+  if_.cs = SEL_UCSEG;
+  if_.eflags = FLAG_IF | FLAG_MBS;
+
+	/* Set up argc and args, argv arrays, update interrupt frame. */
+  int argc = get_no_of_args(file_name_); /* Number of arguments. */
+
+  /* List of string arguments. */
+  char **args = (char**) malloc(sizeof(char*) * argc);  
+  /* List of addresses of each string. */
+  char **argv = (char**) malloc(sizeof(char*) * argc); 
+	parse_arguments(file_name, args, argc);
+
+  success = load (args[0], &if_.eip, &if_.esp);
+
+  struct thread *cur = thread_current ();
+
+  palloc_free_page (file_name);
+  if (!success)
+  {
+    /* Update rs_manager states and quit if load failed. */
+    cur->rs_manager->load_success = false;
+    sema_up (&cur->rs_manager->child_load_sema);
+    // printf ("(start_process) FAIL load sema incremented for %s\n", cur->name);
+
+    thread_exit ();
+  }
+
+  /* Increment child_load_sema on success, to allow parent process
+     to return from exec. */
+  sema_up (&cur->rs_manager->child_load_sema);
+  // printf ("(start_process) SUCCESS load sema incremented for %s\n", cur->name);
+
+  /* Push words to stack. */
+  for (int i = argc - 1; i >= 0; i--) 
+  {
+    push_string_to_stack(&if_.esp, args[i]);
+    free(args[i]);
+
+    /* Update argv to contain address of string being pushed to stack. */
+    argv[i] = (char *) if_.esp;
+  }
+  free (args);
+
+  /* Word alignment. */
+  if_.esp -= ((int) if_.esp % sizeof (void *));
+
+  /* Push null pointer sentinel to stack. */
+  push_pointer_to_stack (&if_.esp, NULL);
+
+  /* Push address of each string to stack. */
+  for (int i = argc - 1; i >= 0; i--)
+  {
+    push_pointer_to_stack (&if_.esp, argv[i]);
+  }
+  free (argv);
+
+  /* Push argv to stack. */
+  push_pointer_to_stack (&if_.esp, if_.esp);
+
+  /* Push argc to stack. */
+  push_int_to_stack (&if_.esp, argc);
+
+  /* Push a fake return address. */
+  push_pointer_to_stack (&if_.esp, NULL);
+
+
+  /* Start the user process by simulating a return from an
+     interrupt, implemented by intr_exit (in
+     threads/intr-stubs.S).  Because intr_exit takes all of its
+     arguments on the stack in the form of a `struct intr_frame',
+     we just point the stack pointer (%esp) to our stack frame
+     and jump to it. */
+  asm volatile ("movl %0, %%esp; jmp intr_exit" : : "g" (&if_) : "memory");
+  NOT_REACHED ();
+}
+
 
 /* We load ELF binaries.  The following definitions are taken
    from the ELF specification, [ELF1], more-or-less verbatim.  */
