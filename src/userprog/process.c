@@ -19,12 +19,15 @@
 #include "../threads/thread.h"
 #include "../threads/vaddr.h"
 
+#define MAX_CMDLINE_LEN 128
+
+
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
 
 /* Function to get number of arguments in a command line string */
-static int get_no_args(const char *command_line) 
+static int get_no_of_args(const char *command_line) 
  {
   int no_chars = 1;
   int no_args = 0;
@@ -79,8 +82,10 @@ static void parse_arguments(const char *command_line, char **args, int argc)
    before process_execute() returns.  Returns the new process's
    thread id, or TID_ERROR if the thread cannot be created. */
 tid_t
-process_execute (const char *file_name) 
+process_execute (const char *cmd_line) 
 {
+	// printf ("(process-exec) file name: %s\n", file_name);
+
   char *fn_copy;
   tid_t tid;
 
@@ -89,20 +94,29 @@ process_execute (const char *file_name)
   fn_copy = palloc_get_page (0);
   if (fn_copy == NULL)
     return TID_ERROR;
-  strlcpy (fn_copy, file_name, PGSIZE);
+  strlcpy (fn_copy, cmd_line, PGSIZE);
 
-  char* save_ptr;
-  char* program_name = strtok_r(file_name, " ", &save_ptr);
-
-  /* Create a new thread to execute FILE_NAME. This is the first item in argv */
-  tid = thread_create (program_name, PRI_DEFAULT, start_process, fn_copy);
-  if (tid == TID_ERROR)
-    palloc_free_page (fn_copy); 
-
-
+  // printf ("(process-exec) reached 1\n");
   
+  /* Copy cmd_line string so strtok_r can function as intended. */
+  char string_to_tokenize[MAX_CMDLINE_LEN];
+  strlcpy (string_to_tokenize, cmd_line, MAX_CMDLINE_LEN);
+  char* save_ptr;
+  char* program_name = strtok_r (string_to_tokenize, " ", &save_ptr);
+
+	// printf ("(process-exec) program name: %s\n", program_name);
+
+  /* Create a new thread to execute FILE_NAME (first item in argv). */
+  tid = thread_create (program_name, PRI_DEFAULT, start_process, fn_copy);
+
+  if (tid == TID_ERROR)
+  {
+    palloc_free_page (fn_copy); 
+  }
+
   return tid;
 }
+
 
 /* Push a string s onto the stack at esp */
 static void 
@@ -130,10 +144,11 @@ push_pointer_to_stack(void **esp, void *ptr)
 }
 
 /* A thread function that loads a user process and starts it
-   NOT_EXITED. */
+   running. */
 static void
 start_process (void *file_name_)
 {
+	// printf("(start_process) entered \n");
   char *file_name = file_name_;
   struct intr_frame if_;
   bool success;
@@ -144,61 +159,67 @@ start_process (void *file_name_)
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
 
-	/* Set up argc and args, argv arrays, update interrupt frame */
-  int argc = get_no_args(file_name_); /* Number of arguments */
-  char **args = (char**) malloc(sizeof(char*) * argc);  /* List of string arguments */
-  char **argv = (char**) malloc(sizeof(char*) * argc);  /* List of addresses of each string */
+	/* Set up argc and args, argv arrays, update interrupt frame. */
+  int argc = get_no_of_args(file_name_); /* Number of arguments. */
+
+  /* List of string arguments. */
+  char **args = (char**) malloc(sizeof(char*) * argc);  
+  /* List of addresses of each string. */
+  char **argv = (char**) malloc(sizeof(char*) * argc); 
 	parse_arguments(file_name, args, argc);
 
   success = load (args[0], &if_.eip, &if_.esp);
 
-  /* Parent process if child process is loaded successfully or not */
-  struct process *p = thread_current ()->process;
-
-  p->loaded = success;
+  struct thread *cur = thread_current ();
 
   palloc_free_page (file_name);
-  if (!success) 
+  if (!success)
   {
-    p->exit_status = ERROR;
-    sema_up (&p->load_sema);
+    /* Update rs_manager states and quit if load failed. */
+    cur->process->loaded = false;
+    sema_up (&cur->process->load_sema);
+    // printf ("(start_process) FAIL load sema incremented for %s\n", cur->name);
+
     thread_exit ();
   }
 
-  /* Push words to top of stack */
+  /* Increment child_load_sema on success, to allow parent process
+     to return from exec. */
+  sema_up (&cur->process->load_sema);
+  // printf ("(start_process) SUCCESS load sema incremented for %s\n", cur->name);
+
+  /* Push words to stack. */
   for (int i = argc - 1; i >= 0; i--) 
-   {
+  {
     push_string_to_stack(&if_.esp, args[i]);
     free(args[i]);
 
-    /* Update argv to have the address of string being pushed to stack */
+    /* Update argv to contain address of string being pushed to stack. */
     argv[i] = (char *) if_.esp;
-   }
-  free(args);
+  }
+  free (args);
 
-  /* Word alignment */
+  /* Word alignment. */
   if_.esp -= ((int) if_.esp % sizeof (void *));
 
-  /* Push null pointer sentinel to stack */
-  push_pointer_to_stack(&if_.esp, NULL);
+  /* Push null pointer sentinel to stack. */
+  push_pointer_to_stack (&if_.esp, NULL);
 
-  /* Push address of each string to stack */
+  /* Push address of each string to stack. */
   for (int i = argc - 1; i >= 0; i--)
   {
-    push_pointer_to_stack(&if_.esp, argv[i]);
+    push_pointer_to_stack (&if_.esp, argv[i]);
   }
-  free(argv);
+  free (argv);
 
-  /* Push argv to stack */
-  push_pointer_to_stack(&if_.esp, if_.esp);
+  /* Push argv to stack. */
+  push_pointer_to_stack (&if_.esp, if_.esp);
 
-  /* Push argc to stack */
-  push_int_to_stack(&if_.esp, argc);
+  /* Push argc to stack. */
+  push_int_to_stack (&if_.esp, argc);
 
-  /* Push a fake return adress */
-  push_pointer_to_stack(&if_.esp, NULL);
-
-  sema_up (&p->load_sema);
+  /* Push a fake return address. */
+  push_pointer_to_stack (&if_.esp, NULL);
 
 
   /* Start the user process by simulating a return from an
@@ -210,6 +231,7 @@ start_process (void *file_name_)
   asm volatile ("movl %0, %%esp; jmp intr_exit" : : "g" (&if_) : "memory");
   NOT_REACHED ();
 }
+
 
 
 /* Waits for thread TID to die and returns its exit status. 
