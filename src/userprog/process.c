@@ -283,10 +283,10 @@ process_free (struct process *p)
     } 
   }
 
-  lock_acquire (&filesys_lock);
+  // lock_acquire (&filesys_lock);
   file_close (p->executable);
   hash_destroy (&p->file_table, &file_action_func);
-  lock_release (&filesys_lock);
+  // lock_release (&filesys_lock);
 
   /* If parent process is not terminated, make child process 
      information available */
@@ -499,7 +499,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
       goto done; 
     }
 
-  /* Deny writes to executable */
+  /* Deny writes to executable*/
   file_deny_write (file);
   t->process->executable = file;
 
