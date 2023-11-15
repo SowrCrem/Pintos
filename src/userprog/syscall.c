@@ -393,48 +393,53 @@ filesize (int fd)
 static int
 read (int fd, void *buffer, unsigned size)
 {
-	return 0;
-	// struct process *p = thread_current ()->process;
+	struct process *p = thread_current ()->process;
 
-	// if (buffer == NULL || !is_user_vaddr (buffer + size))
-	// {
-	// 	terminate_userprog (ERROR);
-	// }
+	if (buffer == NULL || !is_user_vaddr (buffer + size))
+	{
+		terminate_userprog (ERROR);
+	}
 
-	// if (fd == STDOUT_FILENO)
-	// {
-	// 	/* Cannot read from standard output. */
-	// 	return;
-	// }
-	// else if (fd == STDIN_FILENO)
-	// {
-	// 	/* Can read from standard input. */
-	// 	for (unsigned i = 0; i < size; i++)
-	// 	{
-	// 		((uint8_t *) buffer) [i] = input_getc ();
-	// 	}
-	// 	return size;
-	// }
-	// else 
-	// {
-	// 	struct file *file = get_file_entry (fd)->file;
+	if (fd == STDOUT_FILENO)
+	{
+		/* Cannot read from standard output. */
+		return ERROR;
+	}
+	else if (fd == STDIN_FILENO)
+	{
+		/* Can read from standard input. */
+		for (unsigned i = 0; i < size; i++)
+		{
+			((uint8_t *) buffer) [i] = input_getc ();
+		}
+		return size;
+	}
+	else 
+	{
+		struct file_entry *e = get_file_entry (fd);
+		if (e == NULL)
+		{
+			return ERROR;
+		}
+		struct file *file = e->file;
 
-	// 	if (file == NULL)
-	// 	{
-	// 		return ERROR;
-	// 	}
+		if (file == NULL)
+		{
+			return ERROR;
+		}
 
-	// 	lock_acquire (&p->filesys_lock);
-	// 	int result = file_read (file, buffer, size);
-	// 	lock_release (&p->filesys_lock);
+		lock_acquire (&p->filesys_lock);
+		int result = file_read (file, buffer, size);
+		lock_release (&p->filesys_lock);
 
-	// 	return result;
-	// }
+		return result;
+	}
 }
 
 static int
 write (int fd, const void *buffer, unsigned size)
 {
+
 	if (!(size > MAX_CONSOLE_FILE_SIZE))
 	{
 		if (fd == STDOUT_FILENO)
@@ -442,7 +447,7 @@ write (int fd, const void *buffer, unsigned size)
 			putbuf((char*) buffer, size);
 		}
 	}
-	return 0;
+	return size;
 }
 
 // static void
