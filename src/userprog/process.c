@@ -173,19 +173,26 @@ rs_manager_free (struct rs_manager *rs)
   while (!list_empty (&rs->children))
   {
     struct list_elem *e = list_pop_front (&rs->children);
-    struct rs_manager *child_rs_manager = 
-            list_entry (e, struct rs_manager, child_elem);
+    struct rs_manager *child = list_entry (e, struct rs_manager, child_elem);
 
-    /* Set child rs_manager's parent_rs_manager to NULL. */
-    child_rs_manager->parent_rs_manager = NULL;
+    if (child->exit_status != NOT_EXITED) 
+    {
+      /* If child process is not running, free its rs_manager. */
+      free (child);
+      // rs_manager_free (child);
 
-    /* If child process is not running, free its rs_manager. */
-    if (child_rs_manager->exit_status != NOT_EXITED) 
-      rs_manager_free (child_rs_manager);
+    } else 
+    {
+      /* Set child's parent_rs_manager to NULL. */
+      child->parent_rs_manager = NULL;
+    }
   }
 
   /* Free the file descriptor table. */
+  lock_acquire (&filesys_lock);
+  file_close (rs->executing);
   hash_destroy (&rs->file_table, &file_table_destroy_func);
+  lock_release (&filesys_lock);
 
   if (&rs->file_table == NULL)
     printf ("(rs_manager_free) hash table pointer is NULL\n");
@@ -198,27 +205,28 @@ rs_manager_free (struct rs_manager *rs)
 
    Returns NULL if not found */
 struct file_entry *
-get_file_entry (int fd)
+file_entry_lookup (int fd)
 {
-	struct rs_manager *rs = thread_current ()->rs_manager;
+  // printf ("(file_entry_lookup) entered\n");
+
+  struct hash table = thread_current ()->rs_manager->file_table;
+  struct hash_elem *e;
 
 	/* Get file from fd value. */
-	struct file_entry *target_entry;
-	target_entry->fd = fd;
+	struct file_entry entry;
+	entry.fd = fd;
 
-	struct hash *table = &rs->file_table;
-	struct hash_elem *elem = hash_find (table, &target_entry->file_elem);
+  // printf ("(file_entry_lookup) entered, about to hash_find\n");
+
+	e = hash_find (&table, &entry.file_elem);
 	
-	if (elem == NULL) 
+	if (e == NULL) 
 	{
-		printf ("(get_file_entry) hash_elem not found\n");
+		// printf ("(file_entry_lookup) hash_elem not found\n");
 		return NULL;
 	}
 
-	struct file_entry *file_entry = 
-											hash_entry (elem, struct file_entry, file_elem);
-
-	return file_entry;
+	return hash_entry (e, struct file_entry, file_elem);
 }
 
 /* Returns pointer to child rs_manager, given parent process pointer 

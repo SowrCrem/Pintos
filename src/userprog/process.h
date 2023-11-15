@@ -59,6 +59,6 @@ void process_exit (void);
 void process_activate (void);
 void rs_manager_init (struct rs_manager *, struct thread *);
 struct rs_manager * get_child (struct thread *parent, tid_t tid);
-struct file_entry * get_file_entry (int fd);
+struct file_entry * file_entry_lookup (int fd);
 
 #endif /* userprog/process.h */

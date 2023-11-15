@@ -11,6 +11,9 @@
 /* Block device that contains the file system. */
 extern struct block *fs_device;
 
+/* Global lock for file system. */
+extern struct lock filesys_lock;
+
 void filesys_init (bool format);
 void filesys_done (void);
 bool filesys_create (const char *name, off_t initial_size);

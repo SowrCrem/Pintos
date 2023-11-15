@@ -15,7 +15,6 @@ typedef int pid_t;
 #define STDOUT_FILENO 1
 
 void syscall_init (void);
-void filesys_lock_init (void);
 void terminate_userprog (int status);
 
 #endif /* userprog/syscall.h */

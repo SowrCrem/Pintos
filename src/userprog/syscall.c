@@ -19,23 +19,6 @@
 #define SYS_MIN SYS_HALT  	/* Minimum system call number. */
 #define SYS_MAX SYS_CLOSE 	/* Maximum system call number. */
 
-/* Lock used by (filesys) syscall synchronisation. */
-static struct lock filesys_lock;
-
-/* Initialises filesys_lock. */
-void
-filesys_lock_init (void)
-{
-	lock_init (&filesys_lock);
-}
-
-/* Returns 1 if current process holds filesys_lock, else 0. */
-int
-process_holds_filesys_lock (void)
-{
-	return lock_held_by_current_thread (&filesys_lock);
-}
-
 /* Memory access functions. */
 static int     get_user            (const uint8_t *uaddr);
 static bool    put_user            (uint8_t *udst, uint8_t byte);
@@ -365,7 +348,7 @@ open (const char *file_name)
 static int
 filesize (int fd)
 {
-	struct file *file = get_file_entry (fd)->file;
+	struct file *file = file_entry_lookup (fd)->file;
 
 	lock_acquire (&filesys_lock);
 	int result = file_length (file);
@@ -398,7 +381,7 @@ read (int fd, void *buffer, unsigned size)
 	}
 	else
 	{
-		struct file *file = get_file_entry (fd)->file;
+		struct file *file = file_entry_lookup (fd)->file;
 
 		if (file == NULL)
 		{
@@ -441,7 +424,7 @@ write (int fd, const void *buffer, unsigned size)
 
 	} else
 	{
-		struct file *file = get_file_entry (fd)->file;
+		struct file *file = file_entry_lookup (fd)->file;
 		if (file == NULL)
 		{
 			/* Return 0 (for number of bytes read). */
@@ -459,7 +442,7 @@ write (int fd, const void *buffer, unsigned size)
 static void
 seek (int fd, unsigned position)
 {
-	struct file *file = get_file_entry (fd)->file;
+	struct file *file = file_entry_lookup (fd)->file;
 	
 	lock_acquire (&filesys_lock);
 	file_seek (file, (off_t) position);
@@ -469,7 +452,7 @@ seek (int fd, unsigned position)
 static unsigned
 tell (int fd)
 {
-	struct file *file = get_file_entry (fd)->file;
+	struct file *file = file_entry_lookup (fd)->file;
 
 	lock_acquire (&filesys_lock);
 	unsigned result = (unsigned) file_tell (file);	
@@ -481,12 +464,24 @@ tell (int fd)
 static void
 close (int fd)
 {
-	struct rs_manager *rs = thread_current ()->rs_manager;
-	struct file_entry *file_entry = get_file_entry (fd);
+	// printf ("(close) entered, closing fd %d\n", fd);
 
-	/* Remove entry from table */
+	struct rs_manager *rs = thread_current ()->rs_manager;
+	// printf ("(close) reached 1\n");
+	struct file_entry *file_entry = file_entry_lookup (fd);
+	// printf ("(close) reached 2\n");
+
+	if (file_entry == NULL)
+	{
+	// printf ("(close) reached 3\n");
+		terminate_userprog (ERROR);
+	}
+	// printf ("(close) reached 4\n");
+
+
+	/* Remove entry from table. */
 	lock_acquire (&rs->file_table_lock);
-	hash_delete (&rs->file_table, &file_entry->file);
+	hash_delete (&rs->file_table, &file_entry->file_elem);
 	lock_release (&rs->file_table_lock);
 
 	lock_acquire (&filesys_lock);

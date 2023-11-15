@@ -1,4 +1,5 @@
 #include "filesys/filesys.h"
+#include "threads/synch.h"
 #include <debug.h>
 #include <stdio.h>
 #include <string.h>
@@ -10,6 +11,9 @@
 /* Partition that contains the file system. */
 struct block *fs_device;
 
+/* Global lock for file system. */
+struct lock filesys_lock;
+
 static void do_format (void);
 
 /* Initializes the file system module.
@@ -18,11 +22,14 @@ void
 filesys_init (bool format) 
 {
   fs_device = block_get_role (BLOCK_FILESYS);
+
   if (fs_device == NULL)
     PANIC ("No file system device found, can't initialize file system.");
 
   inode_init ();
   free_map_init ();
+
+  lock_init (&filesys_lock);
 
   if (format) 
     do_format ();
