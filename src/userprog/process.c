@@ -69,6 +69,37 @@ static void parse_arguments (const char *command_line, char **args, int argc)
   args[argc] = NULL; /* Set the last argument to NULL. */
 }
 
+/* Returns hash value for file FILE, which is just a file's FD as it is unique
+   to the file. */
+unsigned
+file_table_hash (const struct hash_elem *e_, void *aux UNUSED) 
+{
+  const struct file_entry *e = hash_entry (e_, struct file_entry, file_elem);
+  return e->fd;
+}
+
+/* Returns true if entry X precedes entry Y in file table. */
+bool
+file_table_less (const struct hash_elem *x_, const struct hash_elem *y_,
+                 void *aux UNUSED)
+{
+  const struct file_entry *x = hash_entry (x_, struct file_entry, file_elem);
+  const struct file_entry *y = hash_entry (y_, struct file_entry, file_elem);
+  
+  return x->fd < y->fd;
+}
+
+/* Closes the file and frees the file_entry corresponding to hash_elem E. */
+void 
+file_table_destroy_func (struct hash_elem *e_, void *aux UNUSED) 
+{
+  /* TODO: Check if current process holds filesys_lock. */
+  
+  struct file_entry *e = hash_entry (e_, struct file_entry, file_elem);
+  file_close (e->file);
+  free (e);
+}
+
 /* Initializes thread CHILD's rs_manager as a child of PARENT's
    rs_manager.
    
@@ -89,7 +120,9 @@ rs_manager_init (struct rs_manager *parent, struct thread *child)
   rs->thread = child;         /* tid > thread*; will remove later. */
   rs->tid = child->tid;
 
-  hash_init (&rs->file_table, NULL, NULL, NULL);
+  hash_init (&rs->file_table, file_table_hash, file_table_less, NULL);
+  lock_init (&rs->file_table_lock);
+  rs->executing = NULL;
   rs->fd_next = 2;  // remove magic number, FD_START
 
   sema_init (&rs->child_load_sema, 0);
@@ -111,9 +144,9 @@ rs_manager_free (struct rs_manager *rs)
   /* Set exit_status to ERROR if exited in error and exit_status still 
      default, and to SUCCESS if exited and exit_status still default. */
   if (rs->exit_status == NOT_EXITED)
-    if (rs->error) 
-      rs->exit_status = ERROR;
-    else
+    // if (rs->error) 
+    //   rs->exit_status = ERROR;
+    // else
       rs->exit_status = SUCCESS;
 
   /* Increment semaphore to allow parent to return from wait. */
@@ -151,8 +184,41 @@ rs_manager_free (struct rs_manager *rs)
       rs_manager_free (child_rs_manager);
   }
 
+  /* Free the file descriptor table. */
+  hash_destroy (&rs->file_table, &file_table_destroy_func);
+
+  if (&rs->file_table == NULL)
+    printf ("(rs_manager_free) hash table pointer is NULL\n");
+
   /* Finally, deallocate original rs_manager memory. */
   free (rs);
+}
+
+/* Returns file_entry pointer for corresponding fd. 
+
+   Returns NULL if not found */
+struct file_entry *
+get_file_entry (int fd)
+{
+	struct rs_manager *rs = thread_current ()->rs_manager;
+
+	/* Get file from fd value. */
+	struct file_entry *target_entry;
+	target_entry->fd = fd;
+
+	struct hash *table = &rs->file_table;
+	struct hash_elem *elem = hash_find (table, &target_entry->file_elem);
+	
+	if (elem == NULL) 
+	{
+		printf ("(get_file_entry) hash_elem not found\n");
+		return NULL;
+	}
+
+	struct file_entry *file_entry = 
+											hash_entry (elem, struct file_entry, file_elem);
+
+	return file_entry;
 }
 
 /* Returns pointer to child rs_manager, given parent process pointer 

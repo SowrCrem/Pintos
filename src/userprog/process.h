@@ -39,14 +39,17 @@ struct rs_manager
   tid_t tid;                              /* Thread identifier. */
   
   struct hash file_table;                 /* Hash table for files. */
-  int fd_next;                            /* Counter for fd value. */
   struct lock file_table_lock;            /* TODO: Synchronize table accesses. */
+  struct file* executing;                 /* TODO: Store deny writes for open file. */
+  int fd_next;                            /* Counter for fd value. */
 
-  struct semaphore child_exit_sema;       /* Semaphore for process exit. */
   struct semaphore child_load_sema;       /* Semaphore for process load. */
-
   bool load_success;                      /* Boolean for load status. */
+  
+  struct semaphore child_exit_sema;       /* Semaphore for process exit. */
+  struct lock exit_lock;                  /* Lock for exiting child process. */
   bool error;                             /* Boolean for exit error status. */
+
   int exit_status;                        /* Exit status of process. */
 };
 
@@ -55,6 +58,7 @@ int process_wait (tid_t);
 void process_exit (void);
 void process_activate (void);
 void rs_manager_init (struct rs_manager *, struct thread *);
-struct rs_manager* get_child (struct thread *parent, tid_t tid);
+struct rs_manager * get_child (struct thread *parent, tid_t tid);
+struct file_entry * get_file_entry (int fd);
 
 #endif /* userprog/process.h */

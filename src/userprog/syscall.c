@@ -14,14 +14,10 @@
 #include "../devices/input.h"
 #include <stdio.h>
 #include <syscall-nr.h>
+#include "../lib/kernel/stdio.h"
 
-#define MAX_CONSOLE_FILE_SIZE 500		/* Maximum console file size. */
-
-#define SYS_MIN SYS_HALT  /* Minimum system call number. */
-#define SYS_MAX SYS_CLOSE /* Maximum system call number. */
-
-#define STDIN_FILENO 0
-#define STDOUT_FILENO 1
+#define SYS_MIN SYS_HALT  	/* Minimum system call number. */
+#define SYS_MAX SYS_CLOSE 	/* Maximum system call number. */
 
 /* Lock used by (filesys) syscall synchronisation. */
 static struct lock filesys_lock;
@@ -31,6 +27,13 @@ void
 filesys_lock_init (void)
 {
 	lock_init (&filesys_lock);
+}
+
+/* Returns 1 if current process holds filesys_lock, else 0. */
+int
+process_holds_filesys_lock (void)
+{
+	return lock_held_by_current_thread (&filesys_lock);
 }
 
 /* Memory access functions. */
@@ -110,7 +113,8 @@ get_user_safe (const uint8_t *uaddr)
 	if (is_user_vaddr (uaddr)) /* Checks if UADDR is below PHYS_BASE */
 		return get_user (uaddr);
 	
-	exit (ERROR);
+	terminate_userprog (ERROR);
+	// exit (ERROR);
 	return ERROR;
 }
 
@@ -198,7 +202,7 @@ syscall_get_args (struct intr_frame *if_, int argc, char** argv)
 }
 
 /* Terminates a user process with given status. */
-static void
+void
 terminate_userprog (int status)
 {
 	struct thread *cur = thread_current();
@@ -213,7 +217,6 @@ terminate_userprog (int status)
 
 	/* Terminate current process. */
 	thread_exit ();
-	printf ("(terminate_userprog) should not reach this point\n");
 }
 
 /* Terminates by calling shutdown_power_off(). Seldom used because
@@ -327,6 +330,7 @@ open (const char *file_name)
 	/* Add file and corresponding fd to process's hash table. */
 	lock_acquire (&filesys_lock);
 	struct file *file = filesys_open (file_name);
+	lock_release (&filesys_lock);
 	
 	/* Return error if file could not be opened. */
 	if (file == NULL)
@@ -336,43 +340,26 @@ open (const char *file_name)
 
 	struct rs_manager *rs = thread_current ()->rs_manager;
 	
-	int fd = rs->fd_next;
-
 	/* Dynamically allocate the file entry. */
 	struct file_entry *entry = malloc (sizeof (struct file_entry));
 
-	entry->file = file;
-	entry->fd = fd;
+	if (entry == NULL)
+	{
+		printf ("(open) malloc failed\n");
+		return ERROR;
+	}
 
-	/* Increment fd current pointer in process. */
-	rs->fd_next = fd++;
+	entry->file = file;
+
+	/* Get file descriptor and increment fd_next for next file descriptor. */
+	entry->fd = rs->fd_next++;
 
 	/* Insert file entry into the file table. */
+	lock_acquire (&rs->file_table_lock);
 	hash_insert (&rs->file_table, &entry->file_elem);
+	lock_release (&rs->file_table_lock);
 
-	lock_release (&filesys_lock);
-
-	return fd;
-}
-
-/* Helper function to return file_entry for corresponding fd. */
-struct file_entry *
-get_file_entry (int fd)
-{
-	struct rs_manager *rs = thread_current ()->rs_manager;
-
-	/* Get file from fd value */
-	struct file_entry *target_entry;
-	target_entry->fd = fd;
-
-	struct hash *table = &rs->file_table;
-	struct hash_elem *elem = hash_find (table, &target_entry->file_elem);
-	
-	struct file_entry *file_entry = 
-											hash_entry (elem, struct file_entry, file_elem);
-
-	return file_entry;
-
+	return entry->fd;
 }
 
 static int
@@ -393,7 +380,6 @@ read (int fd, void *buffer, unsigned size)
 	if (buffer == NULL || !is_user_vaddr (buffer + size))
 	{
 		terminate_userprog (ERROR);
-		printf ("(syscall-read) should not reach this point\n");
 	}
 
 	if (fd == STDOUT_FILENO)
@@ -430,14 +416,44 @@ read (int fd, void *buffer, unsigned size)
 static int
 write (int fd, const void *buffer, unsigned size)
 {
-	if (size <= MAX_CONSOLE_FILE_SIZE)
-	{
-		if (fd == STDOUT_FILENO)
+	if (fd == STDIN_FILENO)
+ 	{
+		/* Cannot write to standard input; return 0 (number of bytes read). */
+		return SUCCESS;
+
+ 	} else if (fd == STDOUT_FILENO)
+ 	{
+		/* Write to standard output. */
+		int i = size;
+		if (size > MAX_BYTES_PUTBUF)
 		{
-			putbuf ((char*) buffer, size);
+			/* Write in chunks to avoid stack overflow. */
+			while (i > MAX_BYTES_PUTBUF)
+			{
+				putbuf (buffer, MAX_BYTES_PUTBUF);
+				buffer += MAX_BYTES_PUTBUF;
+				i -= MAX_BYTES_PUTBUF;
+			}
 		}
+ 		
+		putbuf (buffer, i);
+		return size;
+
+	} else
+	{
+		struct file *file = get_file_entry (fd)->file;
+		if (file == NULL)
+		{
+			/* Return 0 (for number of bytes read). */
+			return SUCCESS;
+		}
+
+		lock_acquire (&filesys_lock);
+		int result = (int) file_write (file, buffer, size);
+		lock_release (&filesys_lock);
+
+		return result;
 	}
-	return 0;
 }
 
 static void
@@ -456,7 +472,7 @@ tell (int fd)
 	struct file *file = get_file_entry (fd)->file;
 
 	lock_acquire (&filesys_lock);
-	unsigned result = file_tell (file);	
+	unsigned result = (unsigned) file_tell (file);	
 	lock_release (&filesys_lock);
 	
 	return result;
@@ -468,15 +484,15 @@ close (int fd)
 	struct rs_manager *rs = thread_current ()->rs_manager;
 	struct file_entry *file_entry = get_file_entry (fd);
 
-	/* Call file_close on file */
-	file_close (file_entry->file);
-
 	/* Remove entry from table */
+	lock_acquire (&rs->file_table_lock);
 	hash_delete (&rs->file_table, &file_entry->file);
+	lock_release (&rs->file_table_lock);
 
-	/* Decrement fd_current - maybe not necessary */
+	lock_acquire (&filesys_lock);
+	file_close (file_entry->file);
+	lock_release (&filesys_lock);
 
-	/* Free entry cause malloced */
 	free (file_entry);
 }
 
@@ -593,7 +609,6 @@ syscall_write (struct intr_frame *if_)
 static void
 syscall_seek (UNUSED struct intr_frame *if_)
 {
-	/* TODO: Retrieve fd, buffer, size from if_ or an argv array. */
 	int fd = syscall_get_arg (if_, 1);
 	unsigned position = syscall_get_arg (if_, 2);
 
@@ -615,10 +630,7 @@ syscall_tell (struct intr_frame *if_)
 static void
 syscall_close (UNUSED struct intr_frame *if_)
 {
-	/* TODO: Retrieve fd, buffer, size from if_ or an argv array. */
 	int fd = syscall_get_arg (if_, 1);
-
-	/* Execute close syscall with arguments. */
 	close (fd);
 }
 
@@ -660,7 +672,9 @@ static void
 syscall_handler (struct intr_frame *if_)
 {
 	int32_t syscall_no = get_syscall_no(if_);
-	/* printf ("(syscall_handler) syscall num: %d", syscall_no); */
+	
+	// printf ("(syscall_handler) syscall num: %d\n", syscall_no);
+	
 	/* Verification of user provided pointer happens within get_user_safe(), and dereferences. */
 
 	/* TODO: Remove page-dir check and modify page_fault() in exception.c to catch invalid user pointers */
@@ -673,12 +687,9 @@ syscall_handler (struct intr_frame *if_)
 
 		/* Execute Syscall */
 		syscall_execute_function (syscall_no, if_);
-	}
-	else
+
+	} else
 	{
 		terminate_userprog (ERROR);
 	}
-
-	/* Handler Finishes - Exit the current Thread */
-	/* printf ("(syscall_handler) end of function for %s\n",	thread_current ()->name); */
 }
