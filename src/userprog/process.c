@@ -125,8 +125,9 @@ rs_manager_init (struct rs_manager *parent, struct thread *child)
 
   hash_init (&rs->file_table, file_table_hash, file_table_less, NULL);
   lock_init (&rs->file_table_lock);
-  rs->executing = NULL;
-  rs->fd_next = 2;  // remove magic number, FD_START
+  rs->executable = NULL;
+  // rs->deny_write = false;
+  rs->fd_next = FD_START;
 
   sema_init (&rs->child_load_sema, 0);
   sema_init (&rs->child_exit_sema, 0);
@@ -195,7 +196,7 @@ rs_manager_free (struct rs_manager *rs)
 
   /* Free the file descriptor table. */
   lock_acquire (&filesys_lock);
-  file_close (rs->executing);
+  file_close (rs->executable);
   hash_destroy (&rs->file_table, &file_table_destroy_func);
   lock_release (&filesys_lock);
 
@@ -618,12 +619,17 @@ load (const char *file_name, void (**eip) (void), void **esp)
   process_activate ();
 
   /* Open executable file. */
+  lock_acquire (&filesys_lock);
   file = filesys_open (file_name);
   if (file == NULL) 
     {
       printf ("load: %s: open failed\n", file_name);
       goto done; 
     }
+
+  /* Deny writes to executable. */
+  file_deny_write (file);
+  t->rs_manager->executable = file;
 
   /* Read and verify executable header. */
   if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
@@ -708,7 +714,8 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
  done:
   /* We arrive here whether the load is successful or not. */
-  file_close (file);
+  // file_close (file);
+  lock_release (&filesys_lock);
   return success;
 }
 

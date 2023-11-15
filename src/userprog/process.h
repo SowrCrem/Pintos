@@ -13,7 +13,7 @@ typedef int tid_t;
 /* Process exit status codes. */
 #define ERROR -1                            /* Process exited in error. */
 #define SUCCESS 0                           /* Process exited normally. */
-#define NOT_EXITED 1                        /* Process has not exited. */
+#define NOT_EXITED 10                        /* Process has not exited. */
 
 /* File descriptors start from 2. */
 #define FD_START 2
@@ -40,7 +40,8 @@ struct rs_manager
   
   struct hash file_table;                 /* Hash table for files. */
   struct lock file_table_lock;            /* TODO: Synchronize table accesses. */
-  struct file* executing;                 /* TODO: Store deny writes for open file. */
+  struct file* executable;                /* Store deny writes for open file. */
+  bool deny_write;                        /* Store write permission for executable. */
   int fd_next;                            /* Counter for fd value. */
 
   struct semaphore child_load_sema;       /* Semaphore for process load. */
