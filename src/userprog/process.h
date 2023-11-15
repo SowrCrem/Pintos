@@ -35,14 +35,8 @@ struct rs_manager
 		struct list children;                   /* List of all child rs_manager. */
 		struct list_elem child_elem;            /* List elem for children list.  */
 
-  struct thread *thread;                  /* Pointer to actual process. */
-  tid_t tid;                              /* Thread identifier. */
-  
-  struct hash file_table;                 /* Hash table for files. */
-  struct lock file_table_lock;            /* TODO: Synchronize table accesses. */
-  struct file* executable;                /* Store deny writes for open file. */
-  bool deny_write;                        /* Store write permission for executable. */
-  int fd_next;                            /* Counter for fd value. */
+		struct thread *thread;                  /* Pointer to actual process. */
+		tid_t tid;                              /* Thread identifier. */
 
 		struct hash file_table;                 /* Hash table for files. */
 		struct lock file_table_lock;            /* TODO: Synchronize table accesses. */

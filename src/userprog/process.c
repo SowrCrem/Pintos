@@ -120,11 +120,8 @@ rs_manager_init (struct rs_manager *parent, struct thread *child)
 
 	list_init (&rs->children);
 
-  hash_init (&rs->file_table, file_table_hash, file_table_less, NULL);
-  lock_init (&rs->file_table_lock);
-  rs->executable = NULL;
-  // rs->deny_write = false;
-  rs->fd_next = FD_START;
+	rs->thread = child;         /* tid > thread*; will remove later. */
+	rs->tid = child->tid;
 
 	hash_init (&rs->file_table, file_table_hash, file_table_less, NULL);
 	lock_init (&rs->file_table_lock);
@@ -190,11 +187,12 @@ rs_manager_free (struct rs_manager *rs)
 			free (child);
 			// rs_manager_free (child);
 
-  /* Free the file descriptor table. */
-  lock_acquire (&filesys_lock);
-  file_close (rs->executable);
-  hash_destroy (&rs->file_table, &file_table_destroy_func);
-  lock_release (&filesys_lock);
+		} else
+		{
+			/* Set child's parent_rs_manager to NULL. */
+			child->parent_rs_manager = NULL;
+		}
+	}
 
 	/* Free the file descriptor table. */
 	lock_acquire (&filesys_lock);
@@ -620,31 +618,18 @@ load (const char *file_name, void (**eip) (void), void **esp)
 		goto done;
 	process_activate ();
 
-  /* Open executable file. */
-  lock_acquire (&filesys_lock);
-  file = filesys_open (file_name);
-  if (file == NULL) 
-    {
-      printf ("load: %s: open failed\n", file_name);
-      goto done; 
-    }
+	/* Open executable file. */
+	lock_acquire (&filesys_lock);
+	file = filesys_open (file_name);
+	if (file == NULL)
+	{
+		printf ("load: %s: open failed\n", file_name);
+		goto done;
+	}
 
-  /* Deny writes to executable. */
-  file_deny_write (file);
-  t->rs_manager->executable = file;
-
-  /* Read and verify executable header. */
-  if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
-      || memcmp (ehdr.e_ident, "\177ELF\1\1\1", 7)
-      || ehdr.e_type != 2
-      || ehdr.e_machine != 3
-      || ehdr.e_version != 1
-      || ehdr.e_phentsize != sizeof (struct Elf32_Phdr)
-      || ehdr.e_phnum > 1024) 
-    {
-      printf ("load: %s: error loading executable\n", file_name);
-      goto done; 
-    }
+	/* Deny writes to executable. */
+	file_deny_write (file);
+	t->rs_manager->executable = file;
 
 	/* Read and verify executable header. */
 	if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
@@ -725,11 +710,13 @@ load (const char *file_name, void (**eip) (void), void **esp)
 	/* Start address. */
 	*eip = (void (*) (void)) ehdr.e_entry;
 
- done:
-  /* We arrive here whether the load is successful or not. */
-  // file_close (file);
-  lock_release (&filesys_lock);
-  return success;
+	success = true;
+
+		done:
+	/* We arrive here whether the load is successful or not. */
+	// file_close (file);
+	lock_release (&filesys_lock);
+	return success;
 }
 
 /* load() helpers. */
