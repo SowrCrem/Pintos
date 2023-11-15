@@ -132,6 +132,7 @@ terminate_userprog (int status)
 
 	/* Send exit status to kernel. */
 	cur->rs_manager->exit_status = status;
+	cur->rs_manager->running = false;
 
 	// printf ("%s current tid %d\n", cur->name, cur->tid);
 

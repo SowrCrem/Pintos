@@ -42,26 +42,40 @@ exit (int status)
 static pid_t
 exec (const char *cmd_line)
 {
+	// printf ("(exec) entered with %s\n", cmd_line);
 	tid_t tid = process_execute (cmd_line);
+
+	// printf ("(exec) process_execute returned %d\n", tid);
+
+	if (tid == TID_ERROR)
+	{
+		printf ("(exec) ERROR cannot create child process\n");
+		return ERROR;
+	}
 
 	/* Find newly created child process and decrement child_load_sema. */
 	struct rs_manager *child_rs_manager = get_child (thread_current (), tid);
 
+	// printf ("(exec) reached 1\n");
+
 	if (child_rs_manager == NULL)
 	{
-		// printf ("(syscall_exec) newly created child process not found\n");
+		printf ("(exec) ERROR newly created child process not found\n");
 		return ERROR;
 	}
 
-	// printf ("(syscall_exec) about to decrement load sema for %s\n",
+
+	// printf ("(exec) about to decrement load sema for %s\n",
 	// 				child_rs_manager->thread->name);
 	sema_down (&child_rs_manager->child_load_sema);
 
-	// printf ("(syscall_exec) just decremented load sema for %s, with tid %d\n",
+	// printf ("(exec) just decremented load sema for %s, with tid %d\n",
 	// 				child_rs_manager->thread->name, tid);
 
 	/* Continues (and returns) only after child process has loaded successfully
 		 (or failed load). */
+
+	// printf ("(exec) reached end\n");
 
 	/* Return TID if child process loaded succesfully, else -1. */
 	if (child_rs_manager->load_success)
@@ -81,7 +95,7 @@ wait (pid_t pid)
 
 	 Returns true if successful, false otherwise. Creating a new file
 	 does not open it: opening the new file is a separate operation which
-	 would require an open system call. */
+	 would require a open system call. */
 static bool
 create (const char *file, unsigned initial_size)
 {
@@ -139,7 +153,7 @@ open (const char *file_name)
 	struct rs_manager *rs = thread_current ()->rs_manager;
 
 	/* Dynamically allocate the file entry. */
-	struct file_entry *entry = (struct file_entry*) (malloc (sizeof (struct file_entry)));
+	struct file_entry *entry = malloc (sizeof (struct file_entry));
 
 	if (entry == NULL)
 	{
@@ -183,7 +197,7 @@ read (int fd, void *buffer, unsigned size)
 	if (fd == STDOUT_FILENO)
 	{
 		/* Cannot read from standard output. */
-		return ERROR;
+		return;
 	}
 	else if (fd == STDIN_FILENO)
 	{
@@ -307,7 +321,10 @@ close (int fd)
 }
 
 
+
 /* Helper Functions */
+
+/* Syscall Helper Functions */
 
 void
 syscall_halt (UNUSED struct intr_frame *if_)
@@ -327,7 +344,7 @@ void
 syscall_exec (struct intr_frame *if_)
 {
 	/* TODO: Retrieve cmd_line from if_ or an argv array */
-	char *cmd_line = (char *) syscall_get_arg (if_, 1);
+	char *cmd_line = syscall_get_arg (if_, 1);
 
 	/* Get result and store it in if_->eax */
 	pid_t result = exec (cmd_line);
@@ -349,7 +366,7 @@ void
 syscall_create (struct intr_frame *if_)
 {
 	/* TODO: Retrieve file, initial_size from if_ or an argv array */
-	char *file = (char *) syscall_get_arg (if_, 1);
+	char *file = syscall_get_arg (if_, 1);
 	unsigned initial_size = syscall_get_arg (if_, 2);
 
 	/* Get result and store it in if_->eax */
@@ -361,7 +378,7 @@ void
 syscall_remove (struct intr_frame *if_)
 {
 	/* TODO: Retrieve file from if_ or an argv array */
-	char *file = (char *) syscall_get_arg (if_, 1);
+	char *file = syscall_get_arg (if_, 1);
 
 	/* Get result and store it in if_->eax */
 	int result = remove (file);
@@ -372,7 +389,7 @@ void
 syscall_open (struct intr_frame *if_)
 {
 	/* TODO: Retrieve file from if_ or an argv array */
-	char *file = (char *) syscall_get_arg (if_, 1);
+	char *file = syscall_get_arg (if_, 1);
 
 	/* Get result and store it in if_->eax */
 	int result = open (file);
@@ -395,7 +412,7 @@ syscall_read (struct intr_frame *if_)
 {
 	/* TODO: Retrieve fd, buffer, size from if_ or an argv array */
 	int fd = syscall_get_arg (if_, 1);
-	void *buffer = (void *) syscall_get_arg (if_, 2);
+	void *buffer = syscall_get_arg (if_, 2);
 	unsigned size = syscall_get_arg (if_, 3);
 
 	/* Get result and store it in if_->eax */
@@ -407,8 +424,8 @@ void
 syscall_write (struct intr_frame *if_)
 {
 	/* Retrieve fd, buffer, size from if_ or an argv array */
-	int fd = (int) syscall_get_arg (if_, 1);
-	void *buffer = (void *) syscall_get_arg (if_, 2);
+	int fd = syscall_get_arg (if_, 1);
+	void *buffer = syscall_get_arg (if_, 2);
 	unsigned size = syscall_get_arg (if_, 3);
 
 	/* Get result and store it in if_->eax */
