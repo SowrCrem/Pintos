@@ -246,25 +246,12 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid) 
 {
-  struct process *parent = thread_current ()->process;
+  struct thread *parent = thread_current ();
   if (parent == NULL)
     return ERROR;
 
-  /* Search through the process struct with the same child_tid */
-  struct process *child;
-  struct list_elem *e;
-  for (e = list_begin (&parent->children); e != list_end (&parent->children); 
-                                                    e = list_next (e))
-  {
-    child = list_entry (e, struct process, child_elem);
-    /* Match corresponding child_tid to the child thread */
-    if (child->pid == child_tid)
-      break;
+  struct process *child = get_child (parent, (tid_t) child_tid);
 
-    child = NULL;
-  }
-
-  
   /* Check if child exists */
   if (child == NULL) 
     return ERROR; /* TODO: Not recursing through child properly */
@@ -789,3 +776,29 @@ void file_action_func (struct hash_elem *e, void * UNUSED) {
 
 }
 
+struct process*
+get_child (struct thread *parent, tid_t child_tid)
+{
+  // printf ("(get_child) entered, try find %d\n", child_tid);
+
+  struct list *children = &parent->process->children;
+
+  if (list_empty (children)) 
+  {
+    // printf ("(get_child) FAIL child not found\n");
+    return NULL;
+  }
+
+  struct process *child_process = NULL;
+  struct list_elem *e;
+  for (e = list_begin (children); e != list_end (children); 
+       e = list_next (e))
+  {
+    child_process = list_entry (e, struct process, child_elem);
+    /* Match corresponding tid to the child thread. */
+    if ((int) child_process->pid == (int) child_tid)
+      break;
+    child_process = NULL;
+  }
+  return child_process;
+}

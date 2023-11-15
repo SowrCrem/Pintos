@@ -249,21 +249,7 @@ exec (const char *cmd_line)
 		return (pid_t) ERROR;
 	}
 
-	/* Cannot load or run for any reason */
-	struct process *parent = thread_current ()->process;
-
-	/* Find the file's corresponding process */
-	struct list *children = &parent->children;
-  	struct process *child;
-	for (struct list_elem *e = list_begin (children); e != list_end (children); 
-													e = list_next (e))
-	{
-		child = list_entry (e, struct process, child_elem);
-		/* Match corresponding child_tid to the child thread */
-		if (child->pid ==  pid)
-			break;
-		child = NULL;
-	}
+	struct process *child = get_child (thread_current (), pid);
 
 	/* Check process validity */
 	if (child == NULL)

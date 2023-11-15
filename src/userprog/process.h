@@ -37,6 +37,7 @@ bool file_less_func (const struct hash_elem *a,
 struct file_entry *get_file_entry (int fd);
 
 void file_action_func (struct hash_elem *e, void *aux);
+struct process* get_child (struct thread *parent, tid_t child_tid);
 
 /* File Entry for Hash Table */
 struct file_entry 
