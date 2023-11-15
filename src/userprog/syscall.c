@@ -279,8 +279,9 @@ exec (const char *cmd_line)
 	{
 		return (pid_t) ERROR;
 	}
-
-	return pid;
+	else {
+		return pid;
+	}
 }
 
 /* Waits for a child process pid and retrieves the child’s exit status. */
@@ -438,19 +439,46 @@ read (int fd, void *buffer, unsigned size)
 static int
 write (int fd, const void *buffer, unsigned size)
 {
-	if (buffer == NULL)
-	{
-		return ERROR;
-	}
-	if (!(size > MAX_CONSOLE_FILE_SIZE))
-	{
-		if (fd == STDOUT_FILENO)
+	if (fd == STDIN_FILENO)
+ 	{
+		/* Cannot write to standard input; return 0 (number of bytes read). */
+		return SUCCESS;
+
+ 	} else if (fd == STDOUT_FILENO)
+ 	{
+		/* Write to standard output. */
+		int i = size;
+		if (size > MAX_BYTES_PUTBUF)
 		{
-			putbuf((char*) buffer, size);
+			/* Write in chunks to avoid stack overflow. */
+			while (i > MAX_BYTES_PUTBUF)
+			{
+				putbuf (buffer, MAX_BYTES_PUTBUF);
+				buffer += MAX_BYTES_PUTBUF;
+				i -= MAX_BYTES_PUTBUF;
+			}
 		}
+ 		
+		putbuf (buffer, i);
+		return size;
+
+	} else
+	{
+		struct file *file = get_file_entry (fd)->file;
+		if (file == NULL)
+		{
+			/* Return 0 (for number of bytes read). */
+			return SUCCESS;
+		}
+
+		lock_acquire (&filesys_lock);
+		int result = (int) file_write (file, buffer, size);
+		lock_release (&filesys_lock);
+
+		return result;
 	}
-	return size;
 }
+
 
 // static void
 // seek (int fd, unsigned position)
