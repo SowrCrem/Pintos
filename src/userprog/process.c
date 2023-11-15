@@ -17,6 +17,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "../lib/string.h"
+
+#define MAX_CMDLINE_LEN 128
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
@@ -129,7 +132,7 @@ rs_manager_init (struct rs_manager *parent, struct thread *child)
   sema_init (&rs->child_exit_sema, 0);
   
   rs->exit_status = NOT_EXITED;
-  rs->error = false;
+  rs->running = true;
   rs->load_success = true;
 
   /* Update child rs_manager pointer. */
@@ -143,11 +146,13 @@ rs_manager_free (struct rs_manager *rs)
 {
   /* Set exit_status to ERROR if exited in error and exit_status still 
      default, and to SUCCESS if exited and exit_status still default. */
-  if (rs->exit_status == NOT_EXITED)
+  if (rs->running)
     // if (rs->error) 
     //   rs->exit_status = ERROR;
     // else
       rs->exit_status = SUCCESS;
+
+  rs->running = false;
 
   /* Increment semaphore to allow parent to return from wait. */
   sema_up (&rs->child_exit_sema);
@@ -156,7 +161,7 @@ rs_manager_free (struct rs_manager *rs)
   if (rs->parent_rs_manager->thread != NULL) 
   {
     /* Free parent rs_manager if RS parent process has exited. */
-    if (rs->parent_rs_manager->exit_status != NOT_EXITED)
+    if (!rs->parent_rs_manager->running)
     {
       rs_manager_free (rs->parent_rs_manager);
     } else /* Don't free any memory if parent process is alive. */
@@ -175,7 +180,7 @@ rs_manager_free (struct rs_manager *rs)
     struct list_elem *e = list_pop_front (&rs->children);
     struct rs_manager *child = list_entry (e, struct rs_manager, child_elem);
 
-    if (child->exit_status != NOT_EXITED) 
+    if (!child->running) 
     {
       /* If child process is not running, free its rs_manager. */
       free (child);
@@ -274,7 +279,7 @@ get_child (struct thread *parent, tid_t child_tid)
    before process_execute() returns.  Returns the new process's
    thread id, or TID_ERROR if the thread cannot be created. */
 tid_t
-process_execute (const char *file_name) 
+process_execute (const char *cmd_line) 
 {
 	// printf ("(process-exec) file name: %s\n", file_name);
 
@@ -286,10 +291,16 @@ process_execute (const char *file_name)
   fn_copy = palloc_get_page (0);
   if (fn_copy == NULL)
     return TID_ERROR;
-  strlcpy (fn_copy, file_name, PGSIZE);
+  strlcpy (fn_copy, cmd_line, PGSIZE);
 
+  // printf ("(process-exec) reached 1\n");
+  
+  /* Copy cmd_line string so strtok_r can function as intended. */
+  char string_to_tokenize[MAX_CMDLINE_LEN];
+  strlcpy (string_to_tokenize, cmd_line, MAX_CMDLINE_LEN);
   char* save_ptr;
-  char* program_name = strtok_r (file_name, " ", &save_ptr);
+  char* program_name = strtok_r (string_to_tokenize, " ", &save_ptr);
+
 	// printf ("(process-exec) program name: %s\n", program_name);
 
   /* Create a new thread to execute FILE_NAME (first item in argv). */

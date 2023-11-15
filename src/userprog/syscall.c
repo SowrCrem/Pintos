@@ -192,6 +192,7 @@ terminate_userprog (int status)
 
 	/* Send exit status to kernel. */
 	cur->rs_manager->exit_status = status;
+	cur->rs_manager->running = false;
 
 	// printf ("%s current tid %d\n", cur->name, cur->tid);
 
@@ -227,27 +228,41 @@ exit (int status)
 static pid_t
 exec (const char *cmd_line)
 {
+	// printf ("(exec) entered with %s\n", cmd_line);
 	tid_t tid = process_execute (cmd_line);
+
+	// printf ("(exec) process_execute returned %d\n", tid);
+
+	if (tid == TID_ERROR)
+	{
+		printf ("(exec) ERROR cannot create child process\n");
+		return ERROR;
+	}
 
 	/* Find newly created child process and decrement child_load_sema. */
   struct rs_manager *child_rs_manager = get_child (thread_current (), tid);
 	
+	// printf ("(exec) reached 1\n");
+
 	if (child_rs_manager == NULL)
 	{
-		// printf ("(syscall_exec) newly created child process not found\n");
+		printf ("(exec) ERROR newly created child process not found\n");
 		return ERROR;
 	}
 
-  // printf ("(syscall_exec) about to decrement load sema for %s\n",
+
+  // printf ("(exec) about to decrement load sema for %s\n",
 	// 				child_rs_manager->thread->name);
   sema_down (&child_rs_manager->child_load_sema);
 
-	// printf ("(syscall_exec) just decremented load sema for %s, with tid %d\n",
+	// printf ("(exec) just decremented load sema for %s, with tid %d\n",
 	// 				child_rs_manager->thread->name, tid);
 
   /* Continues (and returns) only after child process has loaded successfully
      (or failed load). */
 
+	// printf ("(exec) reached end\n");
+	
 	/* Return TID if child process loaded succesfully, else -1. */
   if (child_rs_manager->load_success)
     return tid;

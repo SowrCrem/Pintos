@@ -48,7 +48,7 @@ struct rs_manager
   
   struct semaphore child_exit_sema;       /* Semaphore for process exit. */
   struct lock exit_lock;                  /* Lock for exiting child process. */
-  bool error;                             /* Boolean for exit error status. */
+  bool running;                           /* Boolean for running status. */
 
   int exit_status;                        /* Exit status of process. */
 };

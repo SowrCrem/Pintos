@@ -128,7 +128,7 @@ page_fault (struct intr_frame *f)
 
   /* Set boolean to set exit status to ERROR in thread_set_priority. */
   struct thread *t = thread_current ();
-  t->rs_manager->error = true;
+  t->rs_manager->running = false;
 
   // printf ("(page_fault) set %s error to true; exit status -1\n", t->name);
 
