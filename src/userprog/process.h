@@ -20,20 +20,20 @@ typedef int tid_t;
 
 struct file_entry
 {
-  struct hash_elem file_elem;               /* Hash elem for file_table. */
-  struct file* file;                        /* Pointer to file. */
-  int fd;                                   /* File identifier. */
+		struct hash_elem file_elem;               /* Hash elem for file_table. */
+		struct file* file;                        /* Pointer to file. */
+		int fd;                                   /* File identifier. */
 };
 
-/* A relationship manager for user processes. 
+/* A relationship manager for user processes.
 
    Each user process has an rs_manager, used to store its children
    and its exit status, and also some synchronization primitives. */
-struct rs_manager 
+struct rs_manager
 {
-  struct rs_manager *parent_rs_manager;   /* Pointer to parent rs_manager. */
-  struct list children;                   /* List of all child rs_manager. */
-  struct list_elem child_elem;            /* List elem for children list.  */ 
+		struct rs_manager *parent_rs_manager;   /* Pointer to parent rs_manager. */
+		struct list children;                   /* List of all child rs_manager. */
+		struct list_elem child_elem;            /* List elem for children list.  */
 
   struct thread *thread;                  /* Pointer to actual process. */
   tid_t tid;                              /* Thread identifier. */
@@ -44,14 +44,20 @@ struct rs_manager
   bool deny_write;                        /* Store write permission for executable. */
   int fd_next;                            /* Counter for fd value. */
 
-  struct semaphore child_load_sema;       /* Semaphore for process load. */
-  bool load_success;                      /* Boolean for load status. */
-  
-  struct semaphore child_exit_sema;       /* Semaphore for process exit. */
-  struct lock exit_lock;                  /* Lock for exiting child process. */
-  bool running;                           /* Boolean for running status. */
+		struct hash file_table;                 /* Hash table for files. */
+		struct lock file_table_lock;            /* TODO: Synchronize table accesses. */
+		struct file* executable;                /* Store deny writes for open file. */
+		bool deny_write;                        /* Store write permission for executable. */
+		int fd_next;                            /* Counter for fd value. */
 
-  int exit_status;                        /* Exit status of process. */
+		struct semaphore child_load_sema;       /* Semaphore for process load. */
+		bool load_success;                      /* Boolean for load status. */
+
+		struct semaphore child_exit_sema;       /* Semaphore for process exit. */
+		struct lock exit_lock;                  /* Lock for exiting child process. */
+		bool running;                           /* Boolean for running status. */
+
+		int exit_status;                        /* Exit status of process. */
 };
 
 tid_t process_execute (const char *);
