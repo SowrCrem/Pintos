@@ -473,8 +473,7 @@ close (int fd)
 
 	if (file_entry == NULL)
 	{
-		terminate_userprog (ERROR);
-		NOT_REACHED ();
+		return ERROR;
 	}
 
 	/* Call file_close on file */
