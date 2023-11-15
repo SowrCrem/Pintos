@@ -283,10 +283,10 @@ process_free (struct process *p)
     } 
   }
 
-  lock_acquire (&p->filesys_lock);
+  lock_acquire (&filesys_lock);
   file_close (p->executable);
   hash_destroy (&p->file_table, &file_action_func);
-  lock_release (&p->filesys_lock);
+  lock_release (&filesys_lock);
 
   /* If parent process is not terminated, make child process 
      information available */
@@ -323,7 +323,7 @@ void process_init (struct thread *t, struct process *parent)
   p->exit_status = SUCCESS;
 
   hash_init (&p->file_table, file_hash_func, file_less_func, NULL);
-  lock_init (&p->filesys_lock);
+  lock_init (&filesys_lock);
   p->executable = NULL;
   p->fd_new = 2;
 
@@ -491,12 +491,17 @@ load (const char *file_name, void (**eip) (void), void **esp)
   process_activate ();
 
   /* Open executable file. */
+  lock_acquire (&filesys_lock);
   file = filesys_open (file_name);
   if (file == NULL) 
     {
       printf ("load: %s: open failed\n", file_name);
       goto done; 
     }
+
+  /* Deny writes to executable */
+  file_deny_write (file);
+  t->process->executable = file;
 
   /* Read and verify executable header. */
   if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
@@ -581,7 +586,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
  done:
   /* We arrive here whether the load is successful or not. */
-  file_close (file);
+  lock_release (&filesys_lock);
   return success;
 }
 

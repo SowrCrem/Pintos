@@ -6,6 +6,7 @@
 #include <debug.h>
 #include <list.h>
 #include <hash.h>
+#include "threads/synch.h"
 
 /* Wasn't compiling without this typedef from thread.h - ASK UTA ! */
 typedef int tid_t;
@@ -14,6 +15,8 @@ typedef int tid_t;
 #define ERROR -1                            /* Process exited in error. */
 #define SUCCESS 0                           /* Process exited normally. */
 #define NOT_EXITED 1                        /* Process has not exited. */
+
+struct lock filesys_lock;  /* TODO: Remove and make fine grained */
 
 tid_t process_execute (const char *);
 int process_wait (tid_t);

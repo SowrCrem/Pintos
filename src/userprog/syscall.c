@@ -305,9 +305,9 @@ create (const char *file, unsigned initial_size)
 		terminate_userprog(ERROR);
 	}
 
-	lock_acquire (&p->filesys_lock);
+	lock_acquire (&filesys_lock);
 	bool result = filesys_create (file, initial_size);
-	lock_release (&p->filesys_lock);
+	lock_release (&filesys_lock);
 
 	return result;
 }
@@ -325,9 +325,9 @@ remove (const char *file)
 	if (file == NULL)
 		return false;
 
-	lock_acquire (&p->filesys_lock);
+	lock_acquire (&filesys_lock);
 	bool result = filesys_remove (file);
-	lock_release (&p->filesys_lock);
+	lock_release (&filesys_lock);
 
 	return result;
 }
@@ -348,9 +348,9 @@ open (const char *file)
 	/* Add file and corresponding fd to process's hash table */
 
 	/* Open file */
-	lock_acquire (&p->filesys_lock);
+	lock_acquire (&filesys_lock);
 	struct file *f = filesys_open (file);
-	lock_release (&p->filesys_lock);
+	lock_release (&filesys_lock);
 	/* Check validity of open file */
 	if (f == NULL)
 	{
@@ -385,9 +385,9 @@ filesize (int fd)
 	{
 		return ERROR;
 	}
-	lock_acquire(&p->filesys_lock);
+	lock_acquire(&filesys_lock);
 	int result = file_length (f->file);
-	lock_release(&p->filesys_lock);
+	lock_release(&filesys_lock);
 
 	return result;
 
@@ -427,9 +427,9 @@ read (int fd, void *buffer, unsigned size)
 		}
 		struct file *file = e->file;
 
-		lock_acquire (&p->filesys_lock);
+		lock_acquire (&filesys_lock);
 		int result = file_read (file, buffer, size);
-		lock_release (&p->filesys_lock);
+		lock_release (&filesys_lock);
 
 		return result;
 	}
@@ -484,9 +484,9 @@ close (int fd)
 	}
 
 	/* Call file_close on file */
-	lock_acquire (&p->filesys_lock);
+	lock_acquire (&filesys_lock);
 	file_close (file_entry->file);
-	lock_release (&p->filesys_lock);
+	lock_release (&filesys_lock);
 
 	/* Remove entry from table */
 	hash_delete (&p->file_table, &file_entry->hash_elem);
