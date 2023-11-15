@@ -392,12 +392,13 @@ filesize (int fd)
 
 static int
 read (int fd, void *buffer, unsigned size)
-{
+{	
 	struct process *p = thread_current ()->process;
 
 	if (buffer == NULL || !is_user_vaddr (buffer + size))
 	{
 		terminate_userprog (ERROR);
+		return;
 	}
 
 	if (fd == STDOUT_FILENO)
@@ -419,14 +420,9 @@ read (int fd, void *buffer, unsigned size)
 		struct file_entry *e = get_file_entry (fd);
 		if (e == NULL)
 		{
-			return ERROR;
+			return SUCCESS;
 		}
 		struct file *file = e->file;
-
-		if (file == NULL)
-		{
-			return ERROR;
-		}
 
 		lock_acquire (&p->filesys_lock);
 		int result = file_read (file, buffer, size);
@@ -439,7 +435,10 @@ read (int fd, void *buffer, unsigned size)
 static int
 write (int fd, const void *buffer, unsigned size)
 {
-
+	if (buffer == NULL)
+	{
+		return ERROR;
+	}
 	if (!(size > MAX_CONSOLE_FILE_SIZE))
 	{
 		if (fd == STDOUT_FILENO)
@@ -589,7 +588,7 @@ static void
 syscall_read (struct intr_frame *if_)
 {
 	/* TODO: Retrieve fd, buffer, size from if_ or an argv array */
-	int fd = syscall_get_arg (if_, 1);
+	int fd = (int) syscall_get_arg (if_, 1);
 	void *buffer = syscall_get_arg (if_, 2);
 	unsigned size = syscall_get_arg (if_, 3);
 
