@@ -31,8 +31,7 @@ bool file_less_func (const struct hash_elem *a,
                              const struct hash_elem *b,
                              void *aux);
 
-struct file_entry *
-get_file_entry (int fd);
+struct file_entry *get_file_entry (int fd);
 
 void file_action_func (struct hash_elem *e, void *aux);
 

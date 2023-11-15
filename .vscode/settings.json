@@ -8,6 +8,7 @@
         "syscall.h": "c",
         "pagedir.h": "c",
         "vaddr.h": "c",
-        "thread.h": "c"
+        "thread.h": "c",
+        "exception.h": "c"
     }
 }

@@ -183,7 +183,7 @@ syscall_get_args (struct intr_frame *if_, int argc, char** argv)
 }
 
 /* Terminates a user process with given status. */
-static void
+void
 terminate_userprog (int status)
 {
 	struct thread *cur = thread_current();
@@ -301,7 +301,9 @@ create (const char *file, unsigned initial_size)
 	struct process *p = thread_current ()->process;
 
 	if (file == NULL)
+	{
 		return false;
+	}
 
 	lock_acquire (&p->filesys_lock);
 	bool result = filesys_create (file, initial_size);
@@ -360,15 +362,6 @@ open (const char *file)
 	/* Dynamically allocate the file entry */
 	struct file_entry *entry = malloc (sizeof (struct file_entry));
 
-	// if (entry == NULL)
-	// {
-	// 	lock_acquire (&p->filesys_lock);
-	// 	file_close (file);
-	// 	lock_release (&p->filesys_lock);
-
-	// 	terminate_userprog (ERROR);
-	// 	NOT_REACHED ();
-	// }
 
 	entry->file = f;
 	entry->fd   = p->fd_new;
