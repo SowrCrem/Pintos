@@ -31,7 +31,6 @@ halt (void)
 static void
 exit (int status)
 {
-	// printf ("(sycall_exit) running exit(%d)\n", status);
 	terminate_userprog (status);
 }
 
@@ -42,46 +41,35 @@ exit (int status)
 static pid_t
 exec (const char *cmd_line)
 {
-	// printf ("(exec) entered with %s\n", cmd_line);
 	tid_t tid = process_execute (cmd_line);
-
-	// printf ("(exec) process_execute returned %d\n", tid);
 
 	if (tid == TID_ERROR)
 	{
-		printf ("(exec) ERROR cannot create child process\n");
 		return ERROR;
 	}
 
 	/* Find newly created child process and decrement child_load_sema. */
 	struct rs_manager *child_rs_manager = get_child (thread_current (), tid);
 
-	// printf ("(exec) reached 1\n");
-
 	if (child_rs_manager == NULL)
 	{
-		printf ("(exec) ERROR newly created child process not found\n");
 		return ERROR;
 	}
 
-
-	// printf ("(exec) about to decrement load sema for %s\n",
-	// 				child_rs_manager->thread->name);
-	sema_down (&child_rs_manager->child_load_sema);
-
-	// printf ("(exec) just decremented load sema for %s, with tid %d\n",
-	// 				child_rs_manager->thread->name, tid);
-
 	/* Continues (and returns) only after child process has loaded successfully
 		 (or failed load). */
-
-	// printf ("(exec) reached end\n");
+	sema_down (&child_rs_manager->child_load_sema);
 
 	/* Return TID if child process loaded succesfully, else -1. */
 	if (child_rs_manager->load_success)
+	{
 		return tid;
-	else
+	}
+	else 
+	{
 		return ERROR;
+	}
+
 }
 
 /* Waits for a child process pid and retrieves the child’s exit status. */
@@ -139,7 +127,6 @@ open (const char *file_name)
 		return ERROR;
 	}
 
-	/* Add file and corresponding fd to process's hash table. */
 	lock_acquire (&filesys_lock);
 	struct file *file = filesys_open (file_name);
 	lock_release (&filesys_lock);
@@ -166,7 +153,7 @@ open (const char *file_name)
 	/* Get file descriptor and increment fd_next for next file descriptor. */
 	entry->fd = rs->fd_next++;
 
-	/* Insert file entry into the file table. */
+	/* Add file and corresponding fd to process's hash table. */
 	lock_acquire (&rs->file_table_lock);
 	hash_insert (&rs->file_table, &entry->file_elem);
 	lock_release (&rs->file_table_lock);
@@ -233,7 +220,8 @@ write (int fd, const void *buffer, unsigned size)
 		/* Cannot write to standard input; return 0 (number of bytes read). */
 		return SUCCESS;
 
-	} else if (fd == STDOUT_FILENO)
+	} 
+	else if (fd == STDOUT_FILENO)
 	{
 		/* Write to standard output. */
 		int i = size;
@@ -251,7 +239,8 @@ write (int fd, const void *buffer, unsigned size)
 		putbuf (buffer, i);
 		return size;
 
-	} else
+	} 
+	else
 	{
 		struct file *file = file_entry_lookup (fd)->file;
 		if (file == NULL)
@@ -293,20 +282,14 @@ tell (int fd)
 static void
 close (int fd)
 {
-	// printf ("(close) entered, closing fd %d\n", fd);
-
+	
 	struct rs_manager *rs = thread_current ()->rs_manager;
-	// printf ("(close) reached 1\n");
 	struct file_entry *file_entry = file_entry_lookup (fd);
-	// printf ("(close) reached 2\n");
 
 	if (file_entry == NULL)
 	{
-		// printf ("(close) reached 3\n");
 		terminate_userprog (ERROR);
 	}
-	// printf ("(close) reached 4\n");
-
 
 	/* Remove entry from table. */
 	lock_acquire (&rs->file_table_lock);
@@ -322,28 +305,26 @@ close (int fd)
 
 
 
-/* Helper Functions */
-
 /* Syscall Helper Functions */
 
 void
-syscall_halt (UNUSED struct intr_frame *if_)
+syscall_halt (struct intr_frame *if_ UNUSED)
 {
 	halt ();
 }
 
 void
-syscall_exit (UNUSED struct intr_frame *if_)
+syscall_exit (struct intr_frame *if_)
 {
+	/* Retrieve status from if_ or an argv array */
 	int status = syscall_get_arg (if_, 1);
-	//int status = syscall_get_arg (if_, 0);
 	exit (status);
 }
 
 void
 syscall_exec (struct intr_frame *if_)
 {
-	/* TODO: Retrieve cmd_line from if_ or an argv array */
+	/* Retrieve cmd_line from if_ or an argv array */
 	char *cmd_line = syscall_get_arg (if_, 1);
 
 	/* Get result and store it in if_->eax */
@@ -354,7 +335,7 @@ syscall_exec (struct intr_frame *if_)
 void
 syscall_wait (struct intr_frame *if_)
 {
-	/* TODO: Retrieve pid from if_ or an argv array */
+	/* Retrieve pid from if_ or an argv array */
 	pid_t pid = syscall_get_arg (if_, 1);
 
 	/* Get result and store it in if_->eax */
@@ -365,7 +346,7 @@ syscall_wait (struct intr_frame *if_)
 void
 syscall_create (struct intr_frame *if_)
 {
-	/* TODO: Retrieve file, initial_size from if_ or an argv array */
+	/* Retrieve file, initial_size from if_ or an argv array */
 	char *file = syscall_get_arg (if_, 1);
 	unsigned initial_size = syscall_get_arg (if_, 2);
 
@@ -377,7 +358,7 @@ syscall_create (struct intr_frame *if_)
 void
 syscall_remove (struct intr_frame *if_)
 {
-	/* TODO: Retrieve file from if_ or an argv array */
+	/* Retrieve file from if_ or an argv array */
 	char *file = syscall_get_arg (if_, 1);
 
 	/* Get result and store it in if_->eax */
@@ -388,7 +369,7 @@ syscall_remove (struct intr_frame *if_)
 void
 syscall_open (struct intr_frame *if_)
 {
-	/* TODO: Retrieve file from if_ or an argv array */
+	/* Retrieve file from if_ or an argv array */
 	char *file = syscall_get_arg (if_, 1);
 
 	/* Get result and store it in if_->eax */
@@ -399,7 +380,7 @@ syscall_open (struct intr_frame *if_)
 void
 syscall_filesize (struct intr_frame *if_)
 {
-	/* TODO: Retrieve fd from if_ or an argv array */
+	/* Retrieve fd from if_ or an argv array */
 	int fd = syscall_get_arg (if_, 1);
 
 	/* Get result and store it in if_->eax */
@@ -410,7 +391,7 @@ syscall_filesize (struct intr_frame *if_)
 void
 syscall_read (struct intr_frame *if_)
 {
-	/* TODO: Retrieve fd, buffer, size from if_ or an argv array */
+	/* Retrieve fd, buffer, size from if_ or an argv array */
 	int fd = syscall_get_arg (if_, 1);
 	void *buffer = syscall_get_arg (if_, 2);
 	unsigned size = syscall_get_arg (if_, 3);
@@ -457,6 +438,8 @@ syscall_tell (struct intr_frame *if_)
 void
 syscall_close (UNUSED struct intr_frame *if_)
 {
+	/* Retrieve fd from if_ or an argv array. */
 	int fd = syscall_get_arg (if_, 1);
+	
 	close (fd);
 }
