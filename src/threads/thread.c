@@ -217,7 +217,7 @@ thread_create (const char *name, int priority,
   sf->eip = switch_entry;
   sf->ebp = 0;
 
-  /* Add child T to parent process rs_manager, if T is user process. 
+  /* Add child T to parent process rs_manager, if parent is user process. 
      Current thread is parent and newly created thread is child. */
   #ifdef USERPROG
     rs_manager_init (thread_current ()->rs_manager, t);

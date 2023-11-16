@@ -40,6 +40,11 @@ exit (int status)
 static pid_t
 exec (const char *cmd_line)
 {
+  if (cmd_line == NULL || *cmd_line == '\0')
+	{
+		exit (ERROR);
+	}
+
 	tid_t tid = process_execute (cmd_line);
 
 	if (tid == TID_ERROR)
@@ -88,7 +93,7 @@ wait (pid_t pid)
 static bool
 create (const char *file, unsigned initial_size)
 {
-	if (file == NULL || !is_user_vaddr(file))
+	if (file == NULL || *file == '\0')
 	{
 		terminate_userprog (ERROR);
 	}
@@ -108,7 +113,7 @@ create (const char *file, unsigned initial_size)
 static bool
 remove (const char *file)
 {
-	if (file == NULL)
+	if (file == NULL || *file == '\0')
 	{
 		return false;
 	}
@@ -123,7 +128,7 @@ remove (const char *file)
 static int
 open (const char *file_name)
 {
-	if (file_name == NULL)
+	if (file_name == NULL || *file_name == '\0')
 	{
 		return ERROR;
 	}
