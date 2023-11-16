@@ -210,7 +210,7 @@ rs_manager_free (struct rs_manager *rs)
 		/* Free parent rs_manager if RS parent process has exited. */
 		if (!rs->parent_rs_manager->running)
 		{
-			free (rs->parent_rs_manager);
+			rs_manager_free (rs->parent_rs_manager);
 		} 
 		else /* Don't free any memory if parent process is alive. */
 		{
