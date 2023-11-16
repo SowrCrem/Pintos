@@ -19,37 +19,44 @@
 #include <string.h>
 #include "../lib/string.h"
 
-#define MAX_CMDLINE_LEN 128
-
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
 
-/* Returns number of arguments in COMMAND_LINE string. */
-static int get_no_of_args (const char *command_line)
+/* 
+   Returns the number of arguments in the COMMAND_LINE string.
+   Arguments are separated by spaces. Multiple spaces are treated as a single space.
+*/
+static int get_no_of_args(const char *command_line) 
 {
-	int no_chars = 1;
-	int no_args = 0;
+  int no_chars = 1;
+  int no_args = 0;
+  char *cur = command_line;
 
-	char *cur = *command_line;
-	bool in_space = false;
+  bool in_space = false;
 
-	while (cur != '\0')
-	{
-		if (cur != ' ')
-		{
-			no_chars++;
-			if (!in_space)
-			{
-				no_args++;
-				in_space = true;
-			}
-		} else
-		{
-			in_space = false;
-		}
-		cur = *(++command_line);
-	}
-	return no_args;
+  /* Iterate through each character in the command line. */
+  while (*cur != '\0') 
+  {
+    // Check if the current character is not a space
+    if (*cur != ' ') 
+    {
+      no_chars++;
+
+      if (!in_space) 
+      {
+        no_args++;
+        in_space = true; 
+      }
+    } 
+    else 
+    {
+      in_space = false;
+    }
+
+    cur = (++command_line);
+  }
+
+  return no_args;
 }
 
 /* Tokenizes COMMAND_LINE into words. */
@@ -75,37 +82,89 @@ static void parse_arguments (const char *command_line, char **args, int argc)
 /* Returns hash value for file FILE, which is just a file's FD as it is unique
    to the file. */
 unsigned
-file_table_hash (const struct hash_elem *e_, void *aux UNUSED)
+file_table_hash (const struct hash_elem *e, void *aux UNUSED)
 {
-	const struct file_entry *e = hash_entry (e_, struct file_entry, file_elem);
-	return e->fd;
+	const struct file_entry *e_f = hash_entry (e, struct file_entry, file_elem);
+	return e_f->fd;
 }
 
 /* Returns true if entry X precedes entry Y in file table. */
 bool
-file_table_less (const struct hash_elem *x_, const struct hash_elem *y_,
+file_table_less (const struct hash_elem *a, const struct hash_elem *b,
                  void *aux UNUSED)
 {
-	const struct file_entry *x = hash_entry (x_, struct file_entry, file_elem);
-	const struct file_entry *y = hash_entry (y_, struct file_entry, file_elem);
+	const struct file_entry *a_f = hash_entry (a, struct file_entry, file_elem);
+	const struct file_entry *b_f = hash_entry (b, struct file_entry, file_elem);
 
-	return x->fd < y->fd;
+	return a_f->fd < b_f->fd;
 }
 
 /* Closes the file and frees the file_entry corresponding to hash_elem E. */
 void
-file_table_destroy_func (struct hash_elem *e_, void *aux UNUSED)
+file_table_destroy_func (struct hash_elem *e, void *aux UNUSED)
 {
-	/* TODO: Check if current process holds filesys_lock. */
 
-	struct file_entry *e = hash_entry (e_, struct file_entry, file_elem);
-	file_close (e->file);
-	free (e);
+	struct file_entry *e_f = hash_entry (e, struct file_entry, file_elem);
+	file_close (e_f->file);
+	free (e_f);
 }
+
+/* Returns file_entry pointer for corresponding fd.
+   Returns NULL if not found */
+struct file_entry *
+file_entry_lookup (int fd)
+{
+
+	struct hash table = thread_current ()->rs_manager->file_table;
+	struct hash_elem *e;
+
+	/* Get file from fd value. */
+	struct file_entry entry;
+	entry.fd = fd;
+
+	e = hash_find (&table, &entry.file_elem);
+
+	if (e == NULL)
+	{
+		return NULL;
+	}
+
+	return hash_entry (e, struct file_entry, file_elem);
+}
+
+/* Returns pointer to child rs_manager, given parent process pointer
+   and child process TID.
+   Returns NULL if not found. */
+struct rs_manager*
+get_child (struct thread *parent, tid_t child_tid)
+{
+
+	struct list *children = &parent->rs_manager->children;
+
+	if (list_empty (children))
+	{
+		return NULL;
+	}
+
+	/* Iterate through parent rs_manager's list of children. */
+	struct rs_manager *child_rs_manager = NULL;
+	struct list_elem *e;
+	for (e = list_begin (children); e != list_end (children);
+	     e = list_next (e))
+	{
+		child_rs_manager = list_entry (e, struct rs_manager, child_elem);
+		/* Match corresponding tid to the child thread. */
+		if (child_rs_manager->tid == child_tid)
+			break;
+		child_rs_manager = NULL;
+	}
+
+	return child_rs_manager;
+}
+
 
 /* Initializes thread CHILD's rs_manager as a child of PARENT's
    rs_manager.
-
    Requires PARENT's rs_manager pointer and CHILD thread pointer. */
 void
 rs_manager_init (struct rs_manager *parent, struct thread *child)
@@ -120,13 +179,11 @@ rs_manager_init (struct rs_manager *parent, struct thread *child)
 
 	list_init (&rs->children);
 
-	rs->thread = child;         /* tid > thread*; will remove later. */
+	rs->thread = child;        
 	rs->tid = child->tid;
 
 	hash_init (&rs->file_table, file_table_hash, file_table_less, NULL);
 	lock_init (&rs->file_table_lock);
-	rs->executable = NULL;
-	// rs->deny_write = false;
 	rs->fd_next = FD_START;
 
 	sema_init (&rs->child_load_sema, 0);
@@ -145,19 +202,8 @@ rs_manager_init (struct rs_manager *parent, struct thread *child)
 void
 rs_manager_free (struct rs_manager *rs)
 {
-	/* Set exit_status to ERROR if exited in error and exit_status still
-		 default, and to SUCCESS if exited and exit_status still default. */
-	if (rs->running)
-		// if (rs->error)
-		//   rs->exit_status = ERROR;
-		// else
-		rs->exit_status = SUCCESS;
-
-	rs->running = false;
-
 	/* Increment semaphore to allow parent to return from wait. */
 	sema_up (&rs->child_exit_sema);
-	// printf ("(rs_manager_free) increment exit sema for %s\n", rs->thread->name);
 
 	if (rs->parent_rs_manager->thread != NULL)
 	{
@@ -165,9 +211,9 @@ rs_manager_free (struct rs_manager *rs)
 		if (!rs->parent_rs_manager->running)
 		{
 			rs_manager_free (rs->parent_rs_manager);
-		} else /* Don't free any memory if parent process is alive. */
+		} 
+		else /* Don't free any memory if parent process is alive. */
 		{
-			// printf ("(rs_manager_free) don't free for %s\n", rs->thread->name);
 			return;
 		}
 	}
@@ -185,7 +231,6 @@ rs_manager_free (struct rs_manager *rs)
 		{
 			/* If child process is not running, free its rs_manager. */
 			free (child);
-			// rs_manager_free (child);
 
 		} else
 		{
@@ -200,80 +245,10 @@ rs_manager_free (struct rs_manager *rs)
 	hash_destroy (&rs->file_table, &file_table_destroy_func);
 	lock_release (&filesys_lock);
 
-	if (&rs->file_table == NULL)
-		printf ("(rs_manager_free) hash table pointer is NULL\n");
-
 	/* Finally, deallocate original rs_manager memory. */
 	free (rs);
 }
 
-/* Returns file_entry pointer for corresponding fd.
-
-   Returns NULL if not found */
-struct file_entry *
-file_entry_lookup (int fd)
-{
-	// printf ("(file_entry_lookup) entered\n");
-
-	struct hash table = thread_current ()->rs_manager->file_table;
-	struct hash_elem *e;
-
-	/* Get file from fd value. */
-	struct file_entry entry;
-	entry.fd = fd;
-
-	// printf ("(file_entry_lookup) entered, about to hash_find\n");
-
-	e = hash_find (&table, &entry.file_elem);
-
-	if (e == NULL)
-	{
-		// printf ("(file_entry_lookup) hash_elem not found\n");
-		return NULL;
-	}
-
-	return hash_entry (e, struct file_entry, file_elem);
-}
-
-/* Returns pointer to child rs_manager, given parent process pointer
-   and child process TID.
-
-   Returns NULL if not found. */
-struct rs_manager*
-get_child (struct thread *parent, tid_t child_tid)
-{
-	// printf ("(get_child) entered, try find %d\n", child_tid);
-
-	struct list *children = &parent->rs_manager->children;
-
-	if (list_empty (children))
-	{
-		// printf ("(get_child) FAIL child not found\n");
-		return NULL;
-	}
-
-	struct rs_manager *child_rs_manager = NULL;
-	struct list_elem *e;
-	for (e = list_begin (children); e != list_end (children);
-	     e = list_next (e))
-	{
-		child_rs_manager = list_entry (e, struct rs_manager, child_elem);
-		/* Match corresponding tid to the child thread. */
-		if (child_rs_manager->tid == child_tid)
-			break;
-		child_rs_manager = NULL;
-	}
-
-	if (child_rs_manager == NULL)
-	{
-		// printf ("(get_child) FAIL child not found\n");
-	} else
-	{
-		// printf ("(get_child) SUCCESS child id %d found\n", child_rs_manager->tid);
-	}
-
-	return child_rs_manager;
-}
 
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
@@ -282,7 +257,6 @@ get_child (struct thread *parent, tid_t child_tid)
 tid_t
 process_execute (const char *cmd_line)
 {
-	// printf ("(process-exec) file name: %s\n", file_name);
 
 	char *fn_copy;
 	tid_t tid;
@@ -294,15 +268,11 @@ process_execute (const char *cmd_line)
 		return TID_ERROR;
 	strlcpy (fn_copy, cmd_line, PGSIZE);
 
-	// printf ("(process-exec) reached 1\n");
-
 	/* Copy cmd_line string so strtok_r can function as intended. */
 	char string_to_tokenize[MAX_CMDLINE_LEN];
 	strlcpy (string_to_tokenize, cmd_line, MAX_CMDLINE_LEN);
 	char* save_ptr;
 	char* program_name = strtok_r (string_to_tokenize, " ", &save_ptr);
-
-	// printf ("(process-exec) program name: %s\n", program_name);
 
 	/* Create a new thread to execute FILE_NAME (first item in argv). */
 	tid = thread_create (program_name, PRI_DEFAULT, start_process, fn_copy);
@@ -327,39 +297,18 @@ int
 process_wait (tid_t child_tid)
 {
 	struct thread *parent = thread_current ();
-	// printf ("(process_wait) entered, %s (tid %d) waiting on tid %d\n",
-	//         parent->name, parent->tid, child_tid);
-
-	// printf ("(process_wait) get_child about to be called\n");
 
 	/* Search through the rs_manager struct with the same child_tid. */
 	struct rs_manager *child_rs_manager = get_child (parent, child_tid);
 
-	//  printf ("(process_wait) waiting on %s\n", child_rs_manager->thread->name);
-
 	/* Return error if child process does not exist. */
 	if (child_rs_manager == NULL)
 	{
-		//  printf ("(process_wait) ERROR child not found\n");
 		return ERROR;
 	}
 
-	// printf ("(process_wait) get_child returned child tid %d\n",
-	//         child_rs_manager->tid);
-
-	// printf ("(process_wait) about to decrement exit sema for %s\n",
-	//         child_rs_manager->thread->name);
-
-	/* Await termination of child process. */
-	sema_down (&child_rs_manager->child_exit_sema);
-
-	// printf ("(process_wait) just decremented exit sema for %s\n",
-	//         child_rs_manager->thread->name);
-
-	// printf ("(process_wait) %d exit status is %d\n", child_rs_manager->tid,
-	//         child_rs_manager->exit_status);
-
 	/* Continues only if child process has exited. */
+	sema_down (&child_rs_manager->child_exit_sema);
 
 	/* Remove child process from parent's children list. Therefore,
 		 subsequent wait's to the same child will return ERROR. */
@@ -467,22 +416,20 @@ start_process (void *file_name_)
 	success = load (args[0], &if_.eip, &if_.esp);
 
 	struct thread *cur = thread_current ();
+	cur->rs_manager->load_success = success;
+	
 
 	palloc_free_page (file_name);
 	if (!success)
 	{
 		/* Update rs_manager states and quit if load failed. */
-		cur->rs_manager->load_success = false;
 		sema_up (&cur->rs_manager->child_load_sema);
-		// printf ("(start_process) FAIL load sema incremented for %s\n", cur->name);
-
 		thread_exit ();
 	}
 
 	/* Increment child_load_sema on success, to allow parent process
 		 to return from exec. */
 	sema_up (&cur->rs_manager->child_load_sema);
-	// printf ("(start_process) SUCCESS load sema incremented for %s\n", cur->name);
 
 	/* Push words to stack. */
 	for (int i = argc - 1; i >= 0; i--)
@@ -713,10 +660,8 @@ load (const char *file_name, void (**eip) (void), void **esp)
 	success = true;
 
 		done:
-	/* We arrive here whether the load is successful or not. */
-	// file_close (file);
-	lock_release (&filesys_lock);
-	return success;
+			lock_release (&filesys_lock);
+			return success;
 }
 
 /* load() helpers. */

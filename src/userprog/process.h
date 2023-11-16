@@ -18,6 +18,10 @@ typedef int tid_t;
 /* File descriptors start from 2. */
 #define FD_START 2
 
+/* Maximum number of bytes for COMMAND_LINE. */
+#define MAX_CMDLINE_LEN 128
+
+
 struct file_entry
 {
 		struct hash_elem file_elem;               /* Hash elem for file_table. */
@@ -53,6 +57,22 @@ struct rs_manager
 
 		int exit_status;                        /* Exit status of process. */
 };
+
+unsigned file_table_hash (const struct hash_elem *, void *);
+bool
+file_table_less (const struct hash_elem *, const struct hash_elem *,
+                 void *);
+				 void
+file_table_destroy_func (struct hash_elem *, void *);
+struct file_entry *file_entry_lookup (int);
+struct rs_manager* get_child (struct thread *, tid_t );
+
+
+void
+rs_manager_init (struct rs_manager *, struct thread *);
+void
+rs_manager_free (struct rs_manager *);
+
 
 tid_t process_execute (const char *);
 int process_wait (tid_t);
