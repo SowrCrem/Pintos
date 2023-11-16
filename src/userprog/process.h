@@ -11,15 +11,15 @@
 typedef int tid_t;
 
 /* Process exit status codes. */
-#define ERROR -1                            /* Process exited in error. */
-#define SUCCESS 0                           /* Process exited normally. */
-#define NOT_EXITED 10                        /* Process has not exited. */
+#define ERROR (-1)                            /* Process exited in error. */
+#define SUCCESS (0)                           /* Process exited normally. */
+#define NOT_EXITED (1)                        /* Process has not exited. */
 
 /* File descriptors start from 2. */
-#define FD_START 2
+#define FD_START (2)
 
 /* Maximum number of bytes for COMMAND_LINE. */
-#define MAX_CMDLINE_LEN 128
+#define MAX_CMDLINE_LEN (128)
 
 
 struct file_entry
