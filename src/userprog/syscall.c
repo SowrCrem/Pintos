@@ -38,9 +38,9 @@ syscall_execute_function (int32_t syscall_no, struct intr_frame *if_)
 static void
 syscall_handler (struct intr_frame *if_)
 {
-	/* Verification of user provided pointer happens within get_user_safe(), called by get_syscall_no() */
+	/* Verification of user provided pointer happens within get_user_safe(), called by get_syscall_no(). */
 	int32_t syscall_no = get_syscall_no(if_);
-	/* TODO: Remove page-dir check and modify page_fault() in exception.c to catch invalid user pointers */
+	/* Remove page-dir check and modify page_fault() in exception.c to catch invalid user pointers. */
 	void *page = pagedir_get_page (thread_current ()->pagedir, if_->frame_pointer);
 
 	if (syscall_no != ERROR && page != NULL)
@@ -53,7 +53,7 @@ syscall_handler (struct intr_frame *if_)
 	}
 	else
 	{
-		/* Terminate with Error Code */
+		/* Terminate with error code. */
 		terminate_userprog (ERROR);
 	}
 }
