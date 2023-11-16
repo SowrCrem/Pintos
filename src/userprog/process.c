@@ -101,12 +101,16 @@ file_table_less (const struct hash_elem *a, const struct hash_elem *b,
 
 /* Closes the file and frees the file_entry corresponding to hash_elem E. */
 void
-file_table_destroy_func (struct hash_elem *e, void *aux UNUSED)
+file_table_destroy_func (struct hash_elem *e_, void *aux UNUSED)
 {
+  ASSERT (lock_held_by_current_thread (&filesys_lock));
+  
+  struct file_entry *e = hash_entry (e_, struct file_entry, file_elem);
 
-	struct file_entry *e_f = hash_entry (e, struct file_entry, file_elem);
-	file_close (e_f->file);
-	free (e_f);
+	/* Implicitly ALLOW WRITE*/
+	// printf ("(file_table_destroy_func) %s ALLOW WRITE ON CLOSE\n", e->file_name);
+  file_close (e->file);
+  free (e);
 }
 
 /* Returns file_entry pointer for corresponding fd.
@@ -239,11 +243,12 @@ rs_manager_free (struct rs_manager *rs)
 		}
 	}
 
-	/* Free the file descriptor table. */
-	lock_acquire (&filesys_lock);
-	file_close (rs->executable);
-	hash_destroy (&rs->file_table, &file_table_destroy_func);
-	lock_release (&filesys_lock);
+  /* Free the file descriptor table and close executable file. */
+  lock_acquire (&filesys_lock);
+	// printf ("(rs_manager_free) %s ALLOW WRITE ON CLOSE\n", rs->exe_name);
+  file_close (rs->executable);
+  hash_destroy (&rs->file_table, &file_table_destroy_func);
+  lock_release (&filesys_lock);
 
 	/* Finally, deallocate original rs_manager memory. */
 	free (rs);
@@ -620,9 +625,14 @@ load (const char *file_name, void (**eip) (void), void **esp)
 		goto done;
 	}
 
-	/* Deny writes to executable. */
-	file_deny_write (file);
-	t->rs_manager->executable = file;
+  // /* Deny writes to executable. */
+	// printf ("(load) %s DENY WRITE\n", file_name);
+  // file_deny_write (file);
+  // printf ("(load) file: %s\n", file_name);
+
+  /* Store executable file pointer and name of process. */
+  t->rs_manager->executable = file;
+  strlcpy (t->rs_manager->exe_name, file_name, MAX_CMDLINE_LEN);
 
 	/* Read and verify executable header. */
 	if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
@@ -706,8 +716,9 @@ load (const char *file_name, void (**eip) (void), void **esp)
 	success = true;
 
 		done:
-			lock_release (&filesys_lock);
-			return success;
+	/* We arrive here whether the load is successful or not. */
+	lock_release (&filesys_lock);
+	return success;
 }
 
 /* load() helpers. */

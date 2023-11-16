@@ -1,21 +1,20 @@
 #include <stdlib.h>
+#include "../lib/string.h"
 #include "../userprog/syscall-func.h"
 
-static void     halt     (void);
-static void     exit     (int status);
-static pid_t    exec     (const char *file);
-static int      wait     (pid_t pid);
-static bool     create   (const char *file, unsigned initial_size);
-static bool     remove   (const char *file);
-static int      open     (const char *file);
-static int      filesize (int fd);
-static int      read     (int fd, void *buffer, unsigned size);
-static int      write    (int fd, const void *buffer, unsigned size);
-static void     seek     (int fd, unsigned position);
-static unsigned tell     (int fd);
-static void     close    (int fd);
-
-/* Syscall Functions */
+static void halt (void);
+static void exit (int status);
+static pid_t exec (const char *file);
+static int wait (pid_t pid);
+static bool create (const char *file, unsigned initial_size);
+static bool remove (const char *file);
+static int open (const char *file);
+static int filesize (int fd);
+static int read (int fd, void *buffer, unsigned size);
+static int write (int fd, const void *buffer, unsigned size);
+static void seek (int fd, unsigned position);
+static unsigned tell (int fd);
+static void close (int fd);
 
 /* Terminates by calling shutdown_power_off(). Seldom used because
 	 you lose information about possible deadlock situations. */
@@ -45,6 +44,7 @@ exec (const char *cmd_line)
 
 	if (tid == TID_ERROR)
 	{
+		// printf ("(exec) ERROR cannot create child process\n");
 		return ERROR;
 	}
 
@@ -53,6 +53,7 @@ exec (const char *cmd_line)
 
 	if (child_rs_manager == NULL)
 	{
+		printf ("(exec) ERROR newly created child process not found\n");
 		return ERROR;
 	}
 
@@ -148,7 +149,9 @@ open (const char *file_name)
 		return ERROR;
 	}
 
+	/* Set the file entry attributes. */
 	entry->file = file;
+	strlcpy (entry->file_name, file_name, MAX_CMDLINE_LEN);
 
 	/* Get file descriptor and increment fd_next for next file descriptor. */
 	entry->fd = rs->fd_next++;
@@ -218,7 +221,9 @@ write (int fd, const void *buffer, unsigned size)
 	if (fd == STDIN_FILENO)
 	{
 		/* Cannot write to standard input; return 0 (number of bytes read). */
+		// printf ("(write) ERROR: cannot write to STDIN\n");
 		return SUCCESS;
+		// exit (ERROR);
 
 	} 
 	else if (fd == STDOUT_FILENO)
@@ -237,21 +242,43 @@ write (int fd, const void *buffer, unsigned size)
 		}
 
 		putbuf (buffer, i);
+		// printf ("(write) SUCCESS: %d bytes written \n", size);	
 		return size;
 
 	} 
 	else
 	{
-		struct file *file = file_entry_lookup (fd)->file;
-		if (file == NULL)
+		struct file_entry *entry = file_entry_lookup (fd);
+
+		if (entry == NULL)
 		{
 			/* Return 0 (for number of bytes read). */
+			// printf ("(write) ERROR: file could not be opened\n");
 			return SUCCESS;
 		}
 
+		char *exe_name = thread_current ()->rs_manager->exe_name;
+
 		lock_acquire (&filesys_lock);
-		int result = (int) file_write (file, buffer, size);
+
+		// printf ("(write) %s and %s\n", entry->file_name, exe_name);
+		/* Deny writes if file name is the same as the current process exe_name. */
+		if (strcmp (entry->file_name, exe_name) == 0)
+		{
+			// printf ("(write) cannot write to executable file\n");
+			// printf ("(write) %s DENY WRITE\n", entry->file_name);
+			file_deny_write (entry->file);
+		} else 
+		{
+			// printf ("(write) %s is not %s's executable file\n", entry->file_name, exe_name);
+			// printf ("(write) %s ALLOW WRITE\n", entry->file_name);
+			file_allow_write (entry->file);
+		}
+
+		int result = (int) file_write (entry->file, buffer, size);
 		lock_release (&filesys_lock);
+
+		// printf ("(write) SUCCESS: %d bytes written to %s\n", result, exe_name);	
 
 		return result;
 	}
@@ -288,7 +315,9 @@ close (int fd)
 
 	if (file_entry == NULL)
 	{
-		terminate_userprog (ERROR);
+		// printf ("(close) reached 3\n");
+		// terminate_userprog (ERROR);
+		return;
 	}
 
 	/* Remove entry from table. */
@@ -297,6 +326,7 @@ close (int fd)
 	lock_release (&rs->file_table_lock);
 
 	lock_acquire (&filesys_lock);
+	// printf ("(write) %s ALLOW WRITE ON CLOSE\n", file_entry->file_name);
 	file_close (file_entry->file);
 	lock_release (&filesys_lock);
 

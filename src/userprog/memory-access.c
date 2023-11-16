@@ -115,20 +115,3 @@ syscall_get_args (struct intr_frame *if_, int argc, char** argv)
 	}
 	return true;
 }
-
-/* Terminates a user process with given status. */
-void
-terminate_userprog (int status)
-{
-	struct thread *cur = thread_current();
-
-	/* Send exit status to kernel. */
-	cur->rs_manager->exit_status = status;
-	cur->rs_manager->running = false;
-
-	/* Output termination message (only if it is not a kernel thread). */
-	printf ("%s: exit(%d)\n", cur->name, status);
-
-	/* Terminate current process. */
-	thread_exit ();
-}

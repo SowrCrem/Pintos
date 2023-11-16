@@ -48,12 +48,31 @@ syscall_handler (struct intr_frame *if_)
 		/* De-reference frame pointer. */
 		if_->frame_pointer = (*(uint32_t *) if_->frame_pointer);
 
-		/* Execute Syscall */
+		/* Execute corresponding syscall function. */
 		syscall_execute_function (syscall_no, if_);
 	}
 	else
 	{
-		/* Terminate with error code. */
+		/* Terminate user process with ERROR code. */
 		terminate_userprog (ERROR);
 	}
+}
+
+/* Terminates a user process with given status. */
+void
+terminate_userprog (int status)
+{
+	struct thread *cur = thread_current();
+
+	/* Send exit status to kernel. */
+	cur->rs_manager->exit_status = status;
+	cur->rs_manager->running = false;
+
+	// printf ("%s current tid %d\n", cur->name, cur->tid);
+
+	/* Print termination message. */
+	printf ("%s: exit(%d)\n", cur->name, status);
+
+	/* Terminate current process. */
+	thread_exit ();
 }

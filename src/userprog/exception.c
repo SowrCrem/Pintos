@@ -129,7 +129,8 @@ page_fault (struct intr_frame *f)
 	/* Set thread's rs manager's exit status to ERROR, and indicate termination. */
 	struct thread *t = thread_current ();
 	t->rs_manager->running = false;
-	t->rs_manager->exit_status = ERROR;
+	// t->rs_manager->exit_status = ERROR;
+	// printf ("(page_fault) set %s error to true; exit status -1\n", t->name);
 
 	/* Obtain faulting address, the virtual address that was
 		 accessed to cause the fault.  It may point to code or to
