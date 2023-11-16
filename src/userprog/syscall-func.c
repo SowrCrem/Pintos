@@ -88,7 +88,7 @@ wait (pid_t pid)
 static bool
 create (const char *file, unsigned initial_size)
 {
-	if (file == NULL)
+	if (file == NULL || !is_user_vaddr(file))
 	{
 		terminate_userprog (ERROR);
 	}
@@ -145,7 +145,6 @@ open (const char *file_name)
 
 	if (entry == NULL)
 	{
-		printf ("(open) malloc failed\n");
 		return ERROR;
 	}
 

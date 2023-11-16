@@ -37,7 +37,7 @@ static int get_no_of_args(const char *command_line)
   /* Iterate through each character in the command line. */
   while (*cur != '\0') 
   {
-    // Check if the current character is not a space
+    /* Check if the current character is not a space .*/
     if (*cur != ' ') 
     {
       no_chars++;
@@ -186,7 +186,7 @@ rs_manager_init (struct rs_manager *parent, struct thread *child)
 	rs->thread = child;        
 	rs->tid = child->tid;
 
-	hash_init (&rs->file_table, file_table_hash, file_table_less, NULL);
+	hash_init (&rs->file_table, &file_table_hash, &file_table_less, NULL);
 	lock_init (&rs->file_table_lock);
 	rs->fd_next = FD_START;
 
@@ -195,7 +195,7 @@ rs_manager_init (struct rs_manager *parent, struct thread *child)
 
 	rs->exit_status = NOT_EXITED;
 	rs->running = true;
-	rs->load_success = true;
+	rs->load_success = false;
 
 	/* Update child rs_manager pointer. */
 	child->rs_manager = rs;
@@ -206,23 +206,6 @@ rs_manager_init (struct rs_manager *parent, struct thread *child)
 void
 rs_manager_free (struct rs_manager *rs)
 {
-	/* Increment semaphore to allow parent to return from wait. */
-	sema_up (&rs->child_exit_sema);
-
-	if (rs->parent_rs_manager->thread != NULL)
-	{
-		/* Free parent rs_manager if RS parent process has exited. */
-		if (!rs->parent_rs_manager->running)
-		{
-			rs_manager_free (rs->parent_rs_manager);
-		} 
-		else /* Don't free any memory if parent process is alive. */
-		{
-			return;
-		}
-	}
-
-	/* Reaches this point if parent_rs_manager points to exited thread. */
 
 	/* Empty children list and free their respective rs_manager if child
 		 processes are not running. */
@@ -234,6 +217,7 @@ rs_manager_free (struct rs_manager *rs)
 		if (!child->running)
 		{
 			/* If child process is not running, free its rs_manager. */
+			// rs_manager_free (child);
 			free (child);
 
 		} else
@@ -243,15 +227,42 @@ rs_manager_free (struct rs_manager *rs)
 		}
 	}
 
-  /* Free the file descriptor table and close executable file. */
-  lock_acquire (&filesys_lock);
-	// printf ("(rs_manager_free) %s ALLOW WRITE ON CLOSE\n", rs->exe_name);
+	/* Free the file descriptor table and close executable file. */
+	lock_acquire (&filesys_lock);
   file_close (rs->executable);
+
+	lock_acquire (&rs->file_table_lock);
   hash_destroy (&rs->file_table, &file_table_destroy_func);
+	lock_release (&rs->file_table_lock);
+
   lock_release (&filesys_lock);
 
-	/* Finally, deallocate original rs_manager memory. */
-	free (rs);
+	/* If it does not have a parent rs_manager. */
+	if (rs->parent_rs_manager == NULL)
+	{
+		// /* Free parent rs_manager if RS parent process has exited. */
+		// if (!rs->parent_rs_manager->running)
+		// {
+			free (rs);
+		// } 
+		// else /* Don't free any memory if parent process is alive. */
+		// {
+		// 	return;
+		// }
+
+	} else /* If current process does have a parent rs_manager. */
+	{
+		rs->running = false;
+		
+		/* Increment semaphore to allow parent to return from wait. */
+		sema_up (&rs->child_exit_sema);
+	}
+
+	/* Reaches this point if parent_rs_manager points to exited thread. */
+
+
+	// /* Finally, deallocate original rs_manager memory. */
+	// free (rs);
 }
 
 
@@ -312,14 +323,21 @@ process_wait (tid_t child_tid)
 		return ERROR;
 	}
 
+
 	/* Continues only if child process has exited. */
 	sema_down (&child_rs_manager->child_exit_sema);
+	
+	/* Store exit status of child before freeing. */
+	int exit_status = child_rs_manager->exit_status;
+
 
 	/* Remove child process from parent's children list. Therefore,
 		 subsequent wait's to the same child will return ERROR. */
 	list_remove (&child_rs_manager->child_elem);
 
-	return child_rs_manager->exit_status;
+	free (child_rs_manager);
+
+	return exit_status;
 }
 
 
@@ -449,10 +467,10 @@ start_process (void *file_name_)
 	int argc = get_no_of_args(file_name_); /* Number of arguments. */
 
 	/* List of string arguments. */
-	char **args = (char**) malloc(sizeof(char*) * argc);
+	char **args = (char**) malloc (sizeof (char*) * argc);
 	/* List of addresses of each string. */
-	char **argv = (char**) malloc(sizeof(char*) * argc);
-	parse_arguments(file_name, args, argc);
+	char **argv = (char**) malloc (sizeof (char*) * argc);
+	parse_arguments (file_name, args, argc);
 
 	success = load (args[0], &if_.eip, &if_.esp);
 
@@ -473,7 +491,7 @@ start_process (void *file_name_)
 	sema_up (&cur->rs_manager->child_load_sema);
 
 	/* Calculate total size of data pushed onto the stack */
-    int total_size = calc_total_stack_size(argc, argv);
+    int total_size = calc_total_stack_size (argc, argv);
     
     /* Check that user's stack page is not being overflowed. If it is then exit thread */
     if (total_size > PGSIZE)
@@ -485,8 +503,8 @@ start_process (void *file_name_)
 	/* Push words to stack. */
 	for (int i = argc - 1; i >= 0; i--)
 	{
-		push_string_to_stack(&if_.esp, args[i]);
-		free(args[i]);
+		push_string_to_stack (&if_.esp, args[i]);
+		free (args[i]);
 
 		/* Update argv to contain address of string being pushed to stack. */
 		argv[i] = (char *) if_.esp;
