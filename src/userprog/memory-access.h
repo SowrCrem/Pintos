@@ -13,6 +13,9 @@
 #include "../filesys/file.h"
 #include "../devices/input.h"
 
+#define SYS_MIN SYS_HALT  	/* Minimum system call number. */
+#define SYS_MAX SYS_CLOSE 	/* Maximum system call number. */
+
 /* Memory access functions. */
 int     get_user            (const uint8_t *uaddr);
 bool    put_user            (uint8_t *udst, uint8_t byte);

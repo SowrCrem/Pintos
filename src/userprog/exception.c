@@ -126,11 +126,10 @@ page_fault (struct intr_frame *f)
 	bool user;         /* True: access by user, false: access by kernel. */
 	void *fault_addr;  /* Fault address. */
 
-	/* Set boolean to set exit status to ERROR in thread_set_priority. */
+	/* Set thread's rs manager's exit status to ERROR, and indicate termination. */
 	struct thread *t = thread_current ();
 	t->rs_manager->running = false;
-
-	// printf ("(page_fault) set %s error to true; exit status -1\n", t->name);
+	t->rs_manager->exit_status = ERROR;
 
 	/* Obtain faulting address, the virtual address that was
 		 accessed to cause the fault.  It may point to code or to

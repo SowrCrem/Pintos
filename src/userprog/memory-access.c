@@ -1,8 +1,5 @@
 #include "../userprog/memory-access.h"
 
-#define SYS_MIN SYS_HALT  	/* Minimum system call number. */
-#define SYS_MAX SYS_CLOSE 	/* Maximum system call number. */
-
 /* Reads a byte at user virtual address UADDR.
    UADDR must be below PHYS_BASE.
    Returns the byte value if successful, -1 if a segfault
@@ -37,7 +34,6 @@ get_user_safe (const uint8_t *uaddr)
 		return get_user (uaddr);
 
 	terminate_userprog (ERROR);
-	// exit (ERROR);
 	return ERROR;
 }
 
@@ -55,7 +51,6 @@ put_user_safe (uint8_t *udst, uint8_t byte)
 int32_t
 get_user_word_safe (const uint8_t *uaddr)
 {
-	/* TODO: Refactor */
 	int32_t word = 0;
 	for (int i = 0; i < WORD_SIZE; i++)
 	{
@@ -95,8 +90,7 @@ syscall_get_arg (struct intr_frame *if_, int arg_num)
 {
 	int32_t arg =
 			get_user_word_safe ((uint8_t *) if_->esp + (WORD_SIZE * (arg_num)));
-	// printf("(syscall-get-arg) integer argument %d: %d for %s\n", arg_num,
-	// 			 arg, thread_current ()->name);
+
 	return arg;
 }
 
@@ -112,11 +106,9 @@ syscall_invalid_arg (struct intr_frame *if_, int arg_num)
 bool
 syscall_get_args (struct intr_frame *if_, int argc, char** argv)
 {
-	// printf("(syscall-get-args) entered\n");
 	for (int i = 0; i < argc; i++)
 	{
 		int32_t syscall_arg = syscall_get_arg (if_, i + 1);
-		// printf("(setup-argv) syscall arg: %d\n", syscall_arg);
 		if (syscall_arg == ERROR)
 			return false;
 		argv[i] = (char *) &syscall_arg;
@@ -133,8 +125,6 @@ terminate_userprog (int status)
 	/* Send exit status to kernel. */
 	cur->rs_manager->exit_status = status;
 	cur->rs_manager->running = false;
-
-	// printf ("%s current tid %d\n", cur->name, cur->tid);
 
 	/* Output termination message (only if it is not a kernel thread). */
 	printf ("%s: exit(%d)\n", cur->name, status);
