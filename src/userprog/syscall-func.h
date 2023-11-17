@@ -15,8 +15,6 @@ typedef int pid_t;
 /* Maximum console file size in bytes. */
 #define MAX_CONSOLE_FILE_SIZE (500)
 
-#define STDIN_FILENO (0)
-#define STDOUT_FILENO (1)
 
 /* System call helper functions */
 void syscall_halt     (struct intr_frame *if_);

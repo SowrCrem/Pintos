@@ -1,6 +1,8 @@
-#include <stdlib.h>
 #include "../lib/string.h"
 #include "../userprog/syscall-func.h"
+#include "../userprog/syscall.h"
+#include "threads/synch.h"
+#include "stdlib.h"
 
 static void halt (void);
 static void exit (int status);
@@ -343,7 +345,7 @@ void
 syscall_exit (struct intr_frame *if_)
 {
 	/* Retrieve status from if_ or an argv array */
-	int status = syscall_get_arg (if_, 1);
+	int status = (int) syscall_get_arg (if_, 1);
 	exit (status);
 }
 
@@ -351,7 +353,7 @@ void
 syscall_exec (struct intr_frame *if_)
 {
 	/* Retrieve cmd_line from if_ or an argv array */
-	char *cmd_line = syscall_get_arg (if_, 1);
+	char *cmd_line = (char *) syscall_get_arg (if_, 1);
 
 	/* Get result and store it in if_->eax */
 	pid_t result = exec (cmd_line);
@@ -362,7 +364,7 @@ void
 syscall_wait (struct intr_frame *if_)
 {
 	/* Retrieve pid from if_ or an argv array */
-	pid_t pid = syscall_get_arg (if_, 1);
+	pid_t pid = (pid_t) syscall_get_arg (if_, 1);
 
 	/* Get result and store it in if_->eax */
 	int result = wait (pid);
@@ -373,11 +375,11 @@ void
 syscall_create (struct intr_frame *if_)
 {
 	/* Retrieve file, initial_size from if_ or an argv array */
-	char *file = syscall_get_arg (if_, 1);
-	unsigned initial_size = syscall_get_arg (if_, 2);
+	char *file = (char *) syscall_get_arg (if_, 1);
+	unsigned initial_size = (unsigned) syscall_get_arg (if_, 2);
 
 	/* Get result and store it in if_->eax */
-	bool result = create (file, initial_size);
+	bool result = (char *) create (file, initial_size);
 	if_->eax = result;
 }
 
@@ -385,7 +387,7 @@ void
 syscall_remove (struct intr_frame *if_)
 {
 	/* Retrieve file from if_ or an argv array */
-	char *file = syscall_get_arg (if_, 1);
+	char *file = (char *) syscall_get_arg (if_, 1);
 
 	/* Get result and store it in if_->eax */
 	int result = remove (file);
@@ -396,7 +398,7 @@ void
 syscall_open (struct intr_frame *if_)
 {
 	/* Retrieve file from if_ or an argv array */
-	char *file = syscall_get_arg (if_, 1);
+	char *file = (char *) syscall_get_arg (if_, 1);
 
 	/* Get result and store it in if_->eax */
 	int result = open (file);
@@ -407,7 +409,7 @@ void
 syscall_filesize (struct intr_frame *if_)
 {
 	/* Retrieve fd from if_ or an argv array */
-	int fd = syscall_get_arg (if_, 1);
+	int fd = (int) syscall_get_arg (if_, 1);
 
 	/* Get result and store it in if_->eax */
 	int result = filesize (fd);
@@ -418,9 +420,9 @@ void
 syscall_read (struct intr_frame *if_)
 {
 	/* Retrieve fd, buffer, size from if_ or an argv array */
-	int fd = syscall_get_arg (if_, 1);
-	void *buffer = syscall_get_arg (if_, 2);
-	unsigned size = syscall_get_arg (if_, 3);
+	int fd = (int) syscall_get_arg (if_, 1);
+	void *buffer = (void *) syscall_get_arg (if_, 2);
+	unsigned size = (unsigned) syscall_get_arg (if_, 3);
 
 	/* Get result and store it in if_->eax */
 	int result = read (fd, buffer, size);
@@ -431,9 +433,9 @@ void
 syscall_write (struct intr_frame *if_)
 {
 	/* Retrieve fd, buffer, size from if_ or an argv array */
-	int fd = syscall_get_arg (if_, 1);
-	void *buffer = syscall_get_arg (if_, 2);
-	unsigned size = syscall_get_arg (if_, 3);
+	int fd = (int) syscall_get_arg (if_, 1);
+	void *buffer = (void *) syscall_get_arg (if_, 2);
+	unsigned size = (unsigned) syscall_get_arg (if_, 3);
 
 	/* Get result and store it in if_->eax */
 	int result = write (fd, buffer, size);
@@ -443,8 +445,8 @@ syscall_write (struct intr_frame *if_)
 void
 syscall_seek (struct intr_frame *if_ UNUSED)
 {
-	int fd = syscall_get_arg (if_, 1);
-	unsigned position = syscall_get_arg (if_, 2);
+	int fd = (int) syscall_get_arg (if_, 1);
+	unsigned position = (unsigned) syscall_get_arg (if_, 2);
 
 	/* Execute seek syscall with arguments. */
 	seek (fd, position);
@@ -454,7 +456,7 @@ void
 syscall_tell (struct intr_frame *if_)
 {
 	/* Retrieve fd from if_ or an argv array. */
-	int fd = syscall_get_arg (if_, 1);
+	int fd = (int) syscall_get_arg (if_, 1);
 
 	/* Get result and store it in if_->eax. */
 	unsigned result = tell (fd);
@@ -465,7 +467,7 @@ void
 syscall_close (struct intr_frame *if_ UNUSED)
 {
 	/* Retrieve fd from if_ or an argv array. */
-	int fd = syscall_get_arg (if_, 1);
+	int fd = (int) syscall_get_arg (if_, 1);
 	
 	/* Execute close syscall . */
 	close (fd);

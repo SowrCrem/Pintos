@@ -26,7 +26,7 @@ static bool load (const char *cmdline, void (**eip) (void), void **esp);
    Returns the number of arguments in the COMMAND_LINE string.
    Arguments are separated by spaces. Multiple spaces are treated as a single space.
 */
-static int get_no_of_args(const char *command_line) 
+static int get_no_of_args(char *command_line) 
 {
   int no_chars = 1;
   int no_args = 0;
