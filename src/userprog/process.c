@@ -81,7 +81,7 @@ static void parse_arguments (const char *command_line, char **args, int argc)
 
 /* Returns hash value for file FILE, which is just a file's FD as it is unique
    to the file. */
-unsigned
+static unsigned
 file_table_hash (const struct hash_elem *e, void *aux UNUSED)
 {
 	const struct file_entry *e_f = hash_entry (e, struct file_entry, file_elem);
@@ -89,7 +89,7 @@ file_table_hash (const struct hash_elem *e, void *aux UNUSED)
 }
 
 /* Returns true if entry X precedes entry Y in file table. */
-bool
+static bool
 file_table_less (const struct hash_elem *a, const struct hash_elem *b,
                  void *aux UNUSED)
 {
@@ -100,15 +100,14 @@ file_table_less (const struct hash_elem *a, const struct hash_elem *b,
 }
 
 /* Closes the file and frees the file_entry corresponding to hash_elem E. */
-void
+static void
 file_table_destroy_func (struct hash_elem *e_, void *aux UNUSED)
 {
   ASSERT (lock_held_by_current_thread (&filesys_lock));
   
   struct file_entry *e = hash_entry (e_, struct file_entry, file_elem);
 
-	/* Implicitly ALLOW WRITE*/
-	// printf ("(file_table_destroy_func) %s ALLOW WRITE ON CLOSE\n", e->file_name);
+  /* Implicitly ALLOW WRITE*/
   file_close (e->file);
   free (e);
 }
@@ -118,22 +117,28 @@ file_table_destroy_func (struct hash_elem *e_, void *aux UNUSED)
 struct file_entry *
 file_entry_lookup (int fd)
 {
+	struct rs_manager *rs = thread_current ()->rs_manager;
 
-	struct hash table = thread_current ()->rs_manager->file_table;
+	struct hash table = rs->file_table;
 	struct hash_elem *e;
+	struct file_entry *f;
 
 	/* Get file from fd value. */
 	struct file_entry entry;
 	entry.fd = fd;
 
+	lock_acquire (&rs->file_table_lock);
 	e = hash_find (&table, &entry.file_elem);
-
+	
 	if (e == NULL)
 	{
+		lock_release (&rs->file_table_lock);
 		return NULL;
 	}
 
-	return hash_entry (e, struct file_entry, file_elem);
+	f = hash_entry (e, struct file_entry, file_elem);
+	lock_release (&rs->file_table_lock);
+	return f;
 }
 
 /* Returns pointer to child rs_manager, given parent process pointer
@@ -142,7 +147,6 @@ file_entry_lookup (int fd)
 struct rs_manager*
 get_child (struct thread *parent, tid_t child_tid)
 {
-
 	struct list *children = &parent->rs_manager->children;
 
 	if (list_empty (children))
@@ -180,7 +184,6 @@ rs_manager_init (struct rs_manager *parent, struct thread *child)
 	/* Push child onto parent's children list, if parent present. */
 	if (parent != NULL)
 		list_push_back (&parent->children, &rs->child_elem);
-
 	list_init (&rs->children);
 
 	rs->thread = child;        
@@ -191,23 +194,23 @@ rs_manager_init (struct rs_manager *parent, struct thread *child)
 	rs->fd_next = FD_START;
 
 	sema_init (&rs->child_load_sema, 0);
-	sema_init (&rs->child_exit_sema, 0);
-
-	rs->exit_status = NOT_EXITED;
-	rs->running = true;
 	rs->load_success = false;
-	lock_init (&rs->exit_lock);
 
+	sema_init (&rs->child_exit_sema, 0);
+	lock_init (&rs->exit_lock);
+	rs->running = true;
+
+	rs->exit_status = SUCCESS;
+	
 	/* Update child rs_manager pointer. */
 	child->rs_manager = rs;
 }
 
 /* Runs on process exit. Frees rs_manager RS's associated memory if no
    other references to RS are found.  */
-void
+static void
 rs_manager_free (struct rs_manager *rs)
 {
-
 	/* Empty children list and free their respective rs_manager if child
 		 processes are not running. */
 	while (!list_empty (&rs->children))
@@ -233,11 +236,9 @@ rs_manager_free (struct rs_manager *rs)
 
 	/* Free the file descriptor table and close executable file. */
 	lock_acquire (&filesys_lock);
-		if (*rs->exe_name == '\0') {
-			file_close (rs->executable);
-		}
-//  	file_close (rs->executable);
-
+	if (*rs->exe_name == '\0') {
+		file_close (rs->executable);
+	}
 	lock_acquire (&rs->file_table_lock);
   	hash_destroy (&rs->file_table, &file_table_destroy_func);
 	lock_release (&rs->file_table_lock);
@@ -259,8 +260,6 @@ rs_manager_free (struct rs_manager *rs)
 		sema_up (&rs->child_exit_sema);
 		lock_release (&rs->exit_lock);
 	}
-
-	/* Reaches this point if parent_rs_manager points to exited thread. */
 }
 
 
@@ -319,15 +318,13 @@ process_wait (tid_t child_tid)
 	if (child_rs_manager == NULL)
 	{
 		return ERROR;
-	}
-
+	} 
 
 	/* Continues only if child process has exited. */
 	sema_down (&child_rs_manager->child_exit_sema);
 	
 	/* Store exit status of child before freeing. */
 	int exit_status = child_rs_manager->exit_status;
-
 
 	/* Remove child process from parent's children list. Therefore,
 		 subsequent wait's to the same child will return ERROR. */
@@ -450,7 +447,6 @@ calc_total_stack_size(int argc, char** argv)
 static void
 start_process (void *file_name_)
 {
-	// printf("(start_process) entered \n");
 	char *file_name = file_name_;
 	struct intr_frame if_;
 	bool success;
@@ -640,11 +636,6 @@ load (const char *file_name, void (**eip) (void), void **esp)
 		printf ("load: %s: open failed\n", file_name);
 		goto done;
 	}
-
-  // /* Deny writes to executable. */
-	// printf ("(load) %s DENY WRITE\n", file_name);
-  // file_deny_write (file);
-  // printf ("(load) file: %s\n", file_name);
 
 
 	/* Read and verify executable header. */
@@ -878,7 +869,6 @@ setup_stack (void **esp)
 		{
 			/* Temporarily set up stack to avoid immediate page fault */
 			*esp = PHYS_BASE - 12;
-			/* TODO: Remove */
 		}
 		else
 			palloc_free_page (kpage);

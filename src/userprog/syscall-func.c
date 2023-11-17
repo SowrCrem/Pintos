@@ -49,7 +49,6 @@ exec (const char *cmd_line)
 
 	if (tid == TID_ERROR)
 	{
-		// printf ("(exec) ERROR cannot create child process\n");
 		return ERROR;
 	}
 
@@ -231,9 +230,7 @@ write (int fd, const void *buffer, unsigned size)
 	if (fd == STDIN_FILENO)
 	{
 		/* Cannot write to standard input; return 0 (number of bytes read). */
-		// printf ("(write) ERROR: cannot write to STDIN\n");
 		return SUCCESS;
-		// exit (ERROR);
 
 	} 
 	else if (fd == STDOUT_FILENO)
@@ -252,7 +249,6 @@ write (int fd, const void *buffer, unsigned size)
 		}
 
 		putbuf (buffer, i);
-		// printf ("(write) SUCCESS: %d bytes written \n", size);	
 		return size;
 
 	} 
@@ -263,7 +259,6 @@ write (int fd, const void *buffer, unsigned size)
 		if (entry == NULL)
 		{
 			/* Return 0 (for number of bytes read). */
-			// printf ("(write) ERROR: file could not be opened\n");
 			return SUCCESS;
 		}
 
@@ -271,24 +266,17 @@ write (int fd, const void *buffer, unsigned size)
 
 		lock_acquire (&filesys_lock);
 
-		// printf ("(write) %s and %s\n", entry->file_name, exe_name);
 		/* Deny writes if file name is the same as the current process exe_name. */
 		if (strcmp (entry->file_name, exe_name) == 0)
 		{
-			// printf ("(write) cannot write to executable file\n");
-			// printf ("(write) %s DENY WRITE\n", entry->file_name);
 			file_deny_write (entry->file);
 		} else 
 		{
-			// printf ("(write) %s is not %s's executable file\n", entry->file_name, exe_name);
-			// printf ("(write) %s ALLOW WRITE\n", entry->file_name);
 			file_allow_write (entry->file);
 		}
 
 		int result = (int) file_write (entry->file, buffer, size);
 		lock_release (&filesys_lock);
-
-		// printf ("(write) SUCCESS: %d bytes written to %s\n", result, exe_name);	
 
 		return result;
 	}
@@ -319,14 +307,12 @@ tell (int fd)
 static void
 close (int fd)
 {
-	
 	struct rs_manager *rs = thread_current ()->rs_manager;
 	struct file_entry *file_entry = file_entry_lookup (fd);
 
+	/* Check validity of file_entry pointer. */
 	if (file_entry == NULL)
 	{
-		// printf ("(close) reached 3\n");
-		// terminate_userprog (ERROR);
 		return;
 	}
 
@@ -336,7 +322,6 @@ close (int fd)
 	lock_release (&rs->file_table_lock);
 
 	lock_acquire (&filesys_lock);
-	// printf ("(write) %s ALLOW WRITE ON CLOSE\n", file_entry->file_name);
 	file_close (file_entry->file);
 	lock_release (&filesys_lock);
 
@@ -350,6 +335,7 @@ close (int fd)
 void
 syscall_halt (struct intr_frame *if_ UNUSED)
 {
+	/* Execute halt syscall . */
 	halt ();
 }
 
@@ -455,7 +441,7 @@ syscall_write (struct intr_frame *if_)
 }
 
 void
-syscall_seek (UNUSED struct intr_frame *if_)
+syscall_seek (struct intr_frame *if_ UNUSED)
 {
 	int fd = syscall_get_arg (if_, 1);
 	unsigned position = syscall_get_arg (if_, 2);
@@ -476,10 +462,11 @@ syscall_tell (struct intr_frame *if_)
 }
 
 void
-syscall_close (UNUSED struct intr_frame *if_)
+syscall_close (struct intr_frame *if_ UNUSED)
 {
 	/* Retrieve fd from if_ or an argv array. */
 	int fd = syscall_get_arg (if_, 1);
 	
+	/* Execute close syscall . */
 	close (fd);
 }

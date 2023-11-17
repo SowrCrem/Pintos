@@ -7,20 +7,19 @@
 #include <list.h>
 #include <hash.h>
 
-/* Wasn't compiling without this typedef from thread.h - ASK UTA ! */
 typedef int tid_t;
 
 /* Process exit status codes. */
-#define ERROR -1                            /* Process exited in error. */
-#define SUCCESS 0                           /* Process exited normally. */
-#define NOT_EXITED 1                        /* Process has not exited. */
+#define ERROR (-1)                            /* Process exited in error. */
+#define SUCCESS (0)                           /* Process exited normally. */
 
 /* File descriptors start from 2. */
-#define FD_START 2
+#define FD_START (2)
 
 /* Number of characters allowed to be processed from command line. */
-#define MAX_CMDLINE_LEN 128
+#define MAX_CMDLINE_LEN (128)
 
+/* Represents an entry in the hash table for files held by a process. */
 struct file_entry
 {
 		struct hash_elem file_elem;               /* Hash elem for file_table. */
@@ -43,7 +42,7 @@ struct rs_manager
   tid_t tid;                              /* Thread identifier. */
   
   struct hash file_table;                 /* Hash table for files. */
-  struct lock file_table_lock;            /* TODO: Synchronize table accesses. */
+  struct lock file_table_lock;            /* Synchronize table accesses. */
   struct file* executable;                /* Store executable file pointer. */
   char exe_name[MAX_CMDLINE_LEN];         /* Store executable file name. */
   int fd_next;                            /* Counter for fd value. */
@@ -58,28 +57,15 @@ struct rs_manager
   int exit_status;                        /* Exit status of process. */
 };
 
-unsigned file_table_hash (const struct hash_elem *, void *);
-bool
-file_table_less (const struct hash_elem *, const struct hash_elem *,
-                 void *);
-				 void
-file_table_destroy_func (struct hash_elem *, void *);
-struct file_entry *file_entry_lookup (int);
-struct rs_manager* get_child (struct thread *, tid_t );
-
-
-void
-rs_manager_init (struct rs_manager *, struct thread *);
-void
-rs_manager_free (struct rs_manager *);
+void rs_manager_init (struct rs_manager *, struct thread *);
+struct rs_manager * get_child (struct thread *, tid_t);
+struct file_entry * file_entry_lookup (int );
 
 
 tid_t process_execute (const char *);
 int process_wait (tid_t);
 void process_exit (void);
 void process_activate (void);
-void rs_manager_init (struct rs_manager *, struct thread *);
-struct rs_manager * get_child (struct thread *parent, tid_t tid);
-struct file_entry * file_entry_lookup (int fd);
 
 #endif /* userprog/process.h */
+  

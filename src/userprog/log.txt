@@ -1,0 +1,4 @@
+cd build && make all
+make[1]: Entering directory '/Users/simrankaware/Documents/pintos_36/src/userprog/build'
+i686-elf-gcc -c ../../threads/init.c -o threads/init.o -g -msoft-float -O -fno-omit-frame-pointer -ffreestanding -fno-pic -fcommon -mno-sse -fno-stack-protector -nostdinc -I../.. -I../../lib -I../../lib/kernel -Wall -W -Wstrict-prototypes -Wmissing-prototypes -Wsystem-headers -Wno-frame-address -DUSERPROG -DFILESYS -MMD -MF threads/init.d
+make[1]: Leaving directory '/Users/simrankaware/Documents/pintos_36/src/userprog/build'
