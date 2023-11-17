@@ -320,6 +320,8 @@ seek (int fd, unsigned position)
 	lock_release (&filesys_lock);
 }
 
+/* Returns the position of the next byte to be read or written in open file 
+	 fd, expressed in bytes from the beginning of the file. */
 static unsigned
 tell (int fd)
 {
@@ -337,6 +339,7 @@ tell (int fd)
 	return result;
 }
 
+/* Closes file descriptor fd. */
 static void
 close (int fd)
 {

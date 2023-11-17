@@ -107,7 +107,6 @@ file_table_destroy_func (struct hash_elem *e_, void *aux UNUSED)
   
   struct file_entry *e = hash_entry (e_, struct file_entry, file_elem);
 
-  /* Implicitly ALLOW WRITE*/
   file_close (e->file);
   free (e);
 }
@@ -144,7 +143,7 @@ file_entry_lookup (int fd)
 /* Returns pointer to child rs_manager, given parent process pointer
    and child process TID.
    Returns NULL if not found. */
-struct rs_manager*
+struct rs_manager *
 get_child (struct thread *parent, tid_t child_tid)
 {
 	struct list *children = &parent->rs_manager->children;
@@ -171,8 +170,8 @@ get_child (struct thread *parent, tid_t child_tid)
 }
 
 
-/* Initializes thread CHILD's rs_manager as a child of PARENT's
-   rs_manager.
+/* Initializes thread CHILD's rs_manager as a child of PARENT's rs_manager.
+
    Requires PARENT's rs_manager pointer and CHILD thread pointer. */
 void
 rs_manager_init (struct rs_manager *parent, struct thread *child)
@@ -224,7 +223,6 @@ rs_manager_free (struct rs_manager *rs)
 			/* If child process is not running, free its rs_manager. */
 			lock_release (&child->exit_lock);
 			free (child);
-
 		} 
 		else
 		{
@@ -236,14 +234,18 @@ rs_manager_free (struct rs_manager *rs)
 
 	/* Free the file descriptor table and close executable file. */
 	lock_acquire (&filesys_lock);
-	if (*rs->exe_name == '\0') {
-		file_close (rs->executable);
-	}
-	lock_acquire (&rs->file_table_lock);
-  	hash_destroy (&rs->file_table, &file_table_destroy_func);
-	lock_release (&rs->file_table_lock);
 
-  	lock_release (&filesys_lock);
+		if (*rs->exe_name == '\0') {
+			file_close (rs->executable);
+		}
+
+		lock_acquire (&rs->file_table_lock);
+
+			hash_destroy (&rs->file_table, &file_table_destroy_func);
+
+		lock_release (&rs->file_table_lock);
+
+	lock_release (&filesys_lock);
 
 	lock_acquire (&rs->exit_lock);
 	/* If it does not have a parent rs_manager. */
@@ -270,7 +272,6 @@ rs_manager_free (struct rs_manager *rs)
 tid_t
 process_execute (const char *cmd_line)
 {
-
 	char *fn_copy;
 	tid_t tid;
 
@@ -410,36 +411,35 @@ push_pointer_to_stack (void **esp, void *ptr)
 static int
 calc_total_stack_size(int argc, char** argv)
 {
-    size_t total_size = 0;
+	size_t total_size = 0;
 
-    /* Size for each string argument */
-    for (int i = 0; i < argc; i++)
-    {
-        if (argv[i] != NULL)
-        {
-            total_size += strlen(argv[i]) + 1; /* +1 for null terminator */
-        }
-    }
+	/* Size for each string argument */
+	for (int i = 0; i < argc; i++)
+	{
+			if (argv[i] != NULL)
+			{
+					total_size += strlen(argv[i]) + 1; /* +1 for null terminator */
+			}
+	}
 
-    /* Size of word alignment bytes */
+	/* Size of word alignment bytes */
 
-    /* Size for each argv element */
-    total_size += (argc + 1) * sizeof(char *);
+	/* Size for each argv element */
+	total_size += (argc + 1) * sizeof(char *);
 
-    /* Size of null pointer sentinel */
-    total_size += sizeof(char *);
+	/* Size of null pointer sentinel */
+	total_size += sizeof(char *);
 
-    /* Argv */
-    total_size += sizeof(char **);
+	/* Argv */
+	total_size += sizeof(char **);
 
-    /* Argc */
-    total_size += sizeof(int);
+	/* Argc */
+	total_size += sizeof(int);
 
-    /* Fake return address */
-    total_size += sizeof(void *);
+	/* Fake return address */
+	total_size += sizeof(void *);
 
-    return total_size;
-
+	return total_size;
 }
 
 /* A thread function that loads a user process and starts it
@@ -484,15 +484,15 @@ start_process (void *file_name_)
 		 to return from exec. */
 	sema_up (&cur->rs_manager->child_load_sema);
 
-	/* Calculate total size of data pushed onto the stack */
-    int total_size = calc_total_stack_size (argc, argv);
-    
-    /* Check that user's stack page is not being overflowed. If it is then exit thread */
-    if (total_size > PGSIZE)
-    {
-        printf("Error: Stack size exceeds PGSIZE. \n");
-        thread_exit();
-    }
+	/* Calculate total size of data pushed onto the stack. */
+	int total_size = calc_total_stack_size (argc, argv);
+	
+	/* Exit thread if user's stack page is being overflowed. */
+	if (total_size > PGSIZE)
+	{
+		printf("Error: Stack size exceeds PGSIZE. \n");
+		thread_exit();
+	}
 
 	/* Push words to stack. */
 	for (int i = argc - 1; i >= 0; i--)
