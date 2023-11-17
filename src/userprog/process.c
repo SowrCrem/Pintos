@@ -185,7 +185,6 @@ rs_manager_init (struct rs_manager *parent, struct thread *child)
 		list_push_back (&parent->children, &rs->child_elem);
 	list_init (&rs->children);
 
-	rs->thread = child;        
 	rs->tid = child->tid;
 
 	hash_init (&rs->file_table, &file_table_hash, &file_table_less, NULL);
