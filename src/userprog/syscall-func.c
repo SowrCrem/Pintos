@@ -40,9 +40,9 @@ exit (int status)
 static pid_t
 exec (const char *cmd_line)
 {
-  if (cmd_line == NULL || *cmd_line == '\0')
+  if (get_user_safe(cmd_line) == ERROR)
 	{
-		exit (ERROR);
+		terminate_userprog (ERROR);
 	}
 
 	tid_t tid = process_execute (cmd_line);
@@ -93,7 +93,7 @@ wait (pid_t pid)
 static bool
 create (const char *file, unsigned initial_size)
 {
-	if (file == NULL || *file == '\0')
+	if (get_user_safe(file) == ERROR)
 	{
 		terminate_userprog (ERROR);
 	}
@@ -128,7 +128,7 @@ remove (const char *file)
 static int
 open (const char *file_name)
 {
-	if (file_name == NULL || *file_name == '\0')
+	if (get_user_safe(file_name) == ERROR)
 	{
 		return ERROR;
 	}
@@ -183,9 +183,9 @@ filesize (int fd)
 static int
 read (int fd, void *buffer, unsigned size)
 {
-	if (buffer == NULL || !is_user_vaddr (buffer + size))
+	if (get_user_safe(buffer) == ERROR)
 	{
-		terminate_userprog (ERROR);
+		terminate_userprog(ERROR);
 	}
 
 	if (fd == STDOUT_FILENO)
@@ -223,7 +223,7 @@ static int
 write (int fd, const void *buffer, unsigned size)
 {
 	/* Validate the buffer pointer before trying to write. */
-	if (get_user_safe (buffer) == -1)
+	if (get_user_safe (buffer) == ERROR)
 	{
 		return ERROR;
 	}

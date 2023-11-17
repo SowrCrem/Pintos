@@ -233,7 +233,10 @@ rs_manager_free (struct rs_manager *rs)
 
 	/* Free the file descriptor table and close executable file. */
 	lock_acquire (&filesys_lock);
-  	file_close (rs->executable);
+		if (*rs->exe_name == '\0') {
+			file_close (rs->executable);
+		}
+//  	file_close (rs->executable);
 
 	lock_acquire (&rs->file_table_lock);
   	hash_destroy (&rs->file_table, &file_table_destroy_func);
@@ -643,9 +646,6 @@ load (const char *file_name, void (**eip) (void), void **esp)
   // file_deny_write (file);
   // printf ("(load) file: %s\n", file_name);
 
-  /* Store executable file pointer and name of process. */
-  t->rs_manager->executable = file;
-  strlcpy (t->rs_manager->exe_name, file_name, MAX_CMDLINE_LEN);
 
 	/* Read and verify executable header. */
 	if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
@@ -729,6 +729,12 @@ load (const char *file_name, void (**eip) (void), void **esp)
 	success = true;
 
 		done:
+			if (success)
+			{
+				/* Store executable file pointer and name of process. */
+				t->rs_manager->executable = file;
+				strlcpy (t->rs_manager->exe_name, file_name, MAX_CMDLINE_LEN);
+			}
 	/* We arrive here whether the load is successful or not. */
 	lock_release (&filesys_lock);
 	return success;
