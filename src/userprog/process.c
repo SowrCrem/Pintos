@@ -196,6 +196,7 @@ rs_manager_init (struct rs_manager *parent, struct thread *child)
 	rs->exit_status = NOT_EXITED;
 	rs->running = true;
 	rs->load_success = false;
+	lock_init (&rs->exit_lock);
 
 	/* Update child rs_manager pointer. */
 	child->rs_manager = rs;
@@ -214,55 +215,49 @@ rs_manager_free (struct rs_manager *rs)
 		struct list_elem *e = list_pop_front (&rs->children);
 		struct rs_manager *child = list_entry (e, struct rs_manager, child_elem);
 
+		lock_acquire (&child->exit_lock);
 		if (!child->running)
 		{
 			/* If child process is not running, free its rs_manager. */
-			// rs_manager_free (child);
+			lock_release (&child->exit_lock);
 			free (child);
 
-		} else
+		} 
+		else
 		{
 			/* Set child's parent_rs_manager to NULL. */
 			child->parent_rs_manager = NULL;
+			lock_release (&child->exit_lock);
 		}
 	}
 
 	/* Free the file descriptor table and close executable file. */
 	lock_acquire (&filesys_lock);
-  file_close (rs->executable);
+  	file_close (rs->executable);
 
 	lock_acquire (&rs->file_table_lock);
-  hash_destroy (&rs->file_table, &file_table_destroy_func);
+  	hash_destroy (&rs->file_table, &file_table_destroy_func);
 	lock_release (&rs->file_table_lock);
 
-  lock_release (&filesys_lock);
+  	lock_release (&filesys_lock);
 
+	lock_acquire (&rs->exit_lock);
 	/* If it does not have a parent rs_manager. */
 	if (rs->parent_rs_manager == NULL)
 	{
-		// /* Free parent rs_manager if RS parent process has exited. */
-		// if (!rs->parent_rs_manager->running)
-		// {
-			free (rs);
-		// } 
-		// else /* Don't free any memory if parent process is alive. */
-		// {
-		// 	return;
-		// }
-
-	} else /* If current process does have a parent rs_manager. */
+		/* Free parent rs_manager if RS parent process has exited. */
+		lock_release (&rs->exit_lock);
+		free (rs);
+	} 
+	else /* If current process does have a parent rs_manager. */
 	{
 		rs->running = false;
-		
 		/* Increment semaphore to allow parent to return from wait. */
 		sema_up (&rs->child_exit_sema);
+		lock_release (&rs->exit_lock);
 	}
 
 	/* Reaches this point if parent_rs_manager points to exited thread. */
-
-
-	// /* Finally, deallocate original rs_manager memory. */
-	// free (rs);
 }
 
 
