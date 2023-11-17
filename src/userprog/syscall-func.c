@@ -1,8 +1,9 @@
-#include "../lib/string.h"
 #include "../userprog/syscall-func.h"
 #include "../userprog/syscall.h"
-#include "threads/synch.h"
-#include "stdlib.h"
+#include "../threads/synch.h"
+#include "../threads/malloc.h"
+#include "../lib/stdio.h"
+#include "../lib/string.h"
 
 static void halt (void);
 static void exit (int status);
@@ -42,7 +43,7 @@ exit (int status)
 static pid_t
 exec (const char *cmd_line)
 {
-  if (get_user_safe(cmd_line) == ERROR)
+  if (get_user_safe ((uint8_t *) cmd_line) == ERROR)
 	{
 		terminate_userprog (ERROR);
 	}
@@ -94,9 +95,9 @@ wait (pid_t pid)
 static bool
 create (const char *file, unsigned initial_size)
 {
-	if (get_user_safe(file) == ERROR)
+	if (get_user_safe ((uint8_t *) file) == ERROR)
 	{
-		terminate_userprog (ERROR);
+		return false;
 	}
 
 	lock_acquire (&filesys_lock);
@@ -126,10 +127,14 @@ remove (const char *file)
 	return result;
 }
 
+/* Opens the file called file. 
+	
+	 Returns a nonnegative integer handle called a “file descriptor” (fd), 
+	 or -1 if the file could not be opened. */
 static int
 open (const char *file_name)
 {
-	if (get_user_safe(file_name) == ERROR)
+	if (get_user_safe ((uint8_t *) file_name) == ERROR)
 	{
 		return ERROR;
 	}
@@ -169,10 +174,16 @@ open (const char *file_name)
 	return entry->fd;
 }
 
+/* Returns the size, in bytes, of the file open as fd. */
 static int
 filesize (int fd)
 {
 	struct file *file = file_entry_lookup (fd)->file;
+
+	if (file == NULL)
+	{
+		return ERROR;
+	}
 
 	lock_acquire (&filesys_lock);
 	int result = file_length (file);
@@ -181,18 +192,22 @@ filesize (int fd)
 	return result;
 }
 
+/* Reads size bytes from the file open as fd into buffer. 
+
+	 Returns the number of bytes actually read (0 at end of file), or -1 if the
+	 file could not be read (due to a condition other than end of file). */
 static int
 read (int fd, void *buffer, unsigned size)
 {
-	if (get_user_safe(buffer) == ERROR)
+	if (get_user_safe ((uint8_t *) buffer) == ERROR)
 	{
-		terminate_userprog(ERROR);
+		terminate_userprog (ERROR);			/* read-bad-ptr fails without termination. */
 	}
 
+	/* Cannot read from standard output. */
 	if (fd == STDOUT_FILENO)
 	{
-		/* Cannot read from standard output. */
-		return;
+		return ERROR;
 	}
 	else if (fd == STDIN_FILENO)
 	{
@@ -203,7 +218,7 @@ read (int fd, void *buffer, unsigned size)
 		}
 		return size;
 	}
-	else
+	else	/* Can read from file. */
 	{
 		struct file *file = file_entry_lookup (fd)->file;
 
@@ -220,11 +235,15 @@ read (int fd, void *buffer, unsigned size)
 	}
 }
 
+/* Writes size bytes from buffer to the open file fd. 
+	
+	 Returns the number of bytes actually written, which may be less 
+	 than size if some bytes could not be written. */
 static int
 write (int fd, const void *buffer, unsigned size)
 {
-	/* Validate the buffer pointer before trying to write. */
-	if (get_user_safe (buffer) == ERROR)
+	/* Terminate process if buffer pointer is invalid. */
+	if (get_user_safe ((uint8_t *) buffer) == ERROR)
 	{
 		return ERROR;
 	}
@@ -232,7 +251,7 @@ write (int fd, const void *buffer, unsigned size)
 	if (fd == STDIN_FILENO)
 	{
 		/* Cannot write to standard input; return 0 (number of bytes read). */
-		return SUCCESS;
+		return ERROR;
 
 	} 
 	else if (fd == STDOUT_FILENO)
@@ -252,7 +271,6 @@ write (int fd, const void *buffer, unsigned size)
 
 		putbuf (buffer, i);
 		return size;
-
 	} 
 	else
 	{
@@ -260,8 +278,7 @@ write (int fd, const void *buffer, unsigned size)
 
 		if (entry == NULL)
 		{
-			/* Return 0 (for number of bytes read). */
-			return SUCCESS;
+			return ERROR;
 		}
 
 		char *exe_name = thread_current ()->rs_manager->exe_name;
@@ -284,10 +301,19 @@ write (int fd, const void *buffer, unsigned size)
 	}
 }
 
+/* Changes the next byte to be read or written in open file fd to position, 
+   expressed in bytes from the beginning of the file.
+
+	 (Thus, a position of 0 is the file’s start.) */
 static void
 seek (int fd, unsigned position)
 {
 	struct file *file = file_entry_lookup (fd)->file;
+
+	if (file == NULL)
+	{
+		return;
+	}
 
 	lock_acquire (&filesys_lock);
 	file_seek (file, (off_t) position);
@@ -298,6 +324,11 @@ static unsigned
 tell (int fd)
 {
 	struct file *file = file_entry_lookup (fd)->file;
+
+	if (file == NULL)
+	{
+		return SUCCESS;
+	}
 
 	lock_acquire (&filesys_lock);
 	unsigned result = (unsigned) file_tell (file);

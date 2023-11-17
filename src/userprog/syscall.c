@@ -46,7 +46,7 @@ syscall_handler (struct intr_frame *if_)
 	if (syscall_no != ERROR && page != NULL)
 	{
 		/* De-reference frame pointer. */
-		if_->frame_pointer = (*(uint32_t *) if_->frame_pointer);
+		if_->frame_pointer = (void *) (*(uint32_t *) if_->frame_pointer);
 
 		/* Execute corresponding syscall function. */
 		syscall_execute_function (syscall_no, if_);

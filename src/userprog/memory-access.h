@@ -28,4 +28,4 @@ int32_t syscall_get_arg (struct intr_frame *if_, int arg_num);
 bool syscall_invalid_arg (struct intr_frame *if_, int arg_num);
 bool syscall_get_args (struct intr_frame *if_, int argc, char** argv);
 
-#endif //MEMORY_ACCESS_H
+#endif /* userprog/memory-access.h */

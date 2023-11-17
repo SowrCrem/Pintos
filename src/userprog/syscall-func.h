@@ -31,4 +31,4 @@ void syscall_seek     (struct intr_frame *if_);
 void syscall_tell     (struct intr_frame *if_);
 void syscall_close    (struct intr_frame *if_);
 
-#endif //SYSCALL_FUNC_H
+#endif /* userprog/syscall-func.h */
