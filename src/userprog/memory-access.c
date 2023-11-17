@@ -33,7 +33,6 @@ get_user_safe (const uint8_t *uaddr)
 	if (is_user_vaddr (uaddr)) /* Checks if UADDR is below PHYS_BASE */
 		return get_user (uaddr);
 
-	// terminate_userprog (ERROR);
 	return ERROR;
 }
 

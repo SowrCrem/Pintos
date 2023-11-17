@@ -3,10 +3,10 @@
 
 #include "threads/thread.h"
 #include "threads/synch.h"
-#include <debug.h>
 #include <list.h>
 #include <hash.h>
 
+/* Code duplication from thread.h, however, does not compile without. */
 typedef int tid_t;
 
 /* Process exit status codes. */
