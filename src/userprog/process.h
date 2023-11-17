@@ -42,7 +42,6 @@ struct rs_manager
   
   struct hash file_table;                 /* Hash table for files. */
   struct lock file_table_lock;            /* Synchronize table accesses. */
-  struct file* executable;                /* Store executable file pointer. */
   char exe_name[MAX_CMDLINE_LEN];         /* Store executable file name. */
   int fd_next;                            /* Counter for fd value. */
 

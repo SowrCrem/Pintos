@@ -183,12 +183,14 @@ rs_manager_init (struct rs_manager *parent, struct thread *child)
 	/* Push child onto parent's children list, if parent present. */
 	if (parent != NULL)
 		list_push_back (&parent->children, &rs->child_elem);
+
 	list_init (&rs->children);
 
 	rs->tid = child->tid;
 
 	hash_init (&rs->file_table, &file_table_hash, &file_table_less, NULL);
 	lock_init (&rs->file_table_lock);
+	/* We don't initialise exe_name here as it is initialised in load. */
 	rs->fd_next = FD_START;
 
 	sema_init (&rs->child_load_sema, 0);
@@ -198,6 +200,7 @@ rs_manager_init (struct rs_manager *parent, struct thread *child)
 	lock_init (&rs->exit_lock);
 	rs->running = true;
 
+	/* Process exits with SUCCESS (0) if no errors occur or special exit calls made. */
 	rs->exit_status = SUCCESS;
 	
 	/* Update child rs_manager pointer. */
@@ -233,10 +236,6 @@ rs_manager_free (struct rs_manager *rs)
 
 	/* Free the file descriptor table and close executable file. */
 	lock_acquire (&filesys_lock);
-
-		if (*rs->exe_name == '\0') {
-			file_close (rs->executable);
-		}
 
 		lock_acquire (&rs->file_table_lock);
 
@@ -721,8 +720,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
 		done:
 			if (success)
 			{
-				/* Store executable file pointer and name of process. */
-				t->rs_manager->executable = file;
+				/* Store executable file name of the process. */
 				strlcpy (t->rs_manager->exe_name, file_name, MAX_CMDLINE_LEN);
 			}
 	/* We arrive here whether the load is successful or not. */
