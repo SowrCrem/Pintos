@@ -222,6 +222,12 @@ read (int fd, void *buffer, unsigned size)
 static int
 write (int fd, const void *buffer, unsigned size)
 {
+	/* Validate the buffer pointer before trying to write. */
+	if (get_user_safe (buffer) == -1)
+	{
+		return ERROR;
+	}
+	
 	if (fd == STDIN_FILENO)
 	{
 		/* Cannot write to standard input; return 0 (number of bytes read). */
