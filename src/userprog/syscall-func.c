@@ -163,12 +163,11 @@ open (const char *file_name)
 	entry->file = file;
 	strlcpy (entry->file_name, file_name, MAX_CMDLINE_LEN);
 
-	/* Get file descriptor and increment fd_next for next file descriptor. */
-	entry->fd = rs->fd_next++;
-
 	/* Add file and corresponding fd to process's hash table. */
 	lock_acquire (&rs->file_table_lock);
-	hash_insert (&rs->file_table, &entry->file_elem);
+		/* Get file descriptor and increment fd_next for next file descriptor. */
+		entry->fd = rs->fd_next++;
+		hash_insert (&rs->file_table, &entry->file_elem);
 	lock_release (&rs->file_table_lock);
 
 	return entry->fd;

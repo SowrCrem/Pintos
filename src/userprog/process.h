@@ -34,11 +34,10 @@ struct file_entry
    and its exit status, and also some synchronization primitives. */
 struct rs_manager
 {
+  tid_t tid;                              /* Process identifier. */
   struct rs_manager *parent_rs_manager;   /* Pointer to parent rs_manager. */
   struct list children;                   /* List of all child rs_manager. */
   struct list_elem child_elem;            /* List elem for children list.  */
-
-  tid_t tid;                              /* Process identifier. */
   
   struct hash file_table;                 /* Hash table for files. */
   struct lock file_table_lock;            /* Synchronize table accesses. */
@@ -47,11 +46,10 @@ struct rs_manager
 
   struct semaphore child_load_sema;       /* Semaphore for process load. */
   bool load_success;                      /* Boolean for load status. */
-  
+
   struct semaphore child_exit_sema;       /* Semaphore for process exit. */
   struct lock exit_lock;                  /* Lock for exiting child process. */
   bool running;                           /* Boolean for running status. */
-
   int exit_status;                        /* Exit status of process. */
 };
 
