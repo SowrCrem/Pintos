@@ -51,7 +51,8 @@ int32_t
 get_user_word_safe (const uint8_t *uaddr)
 {
 	int32_t word = 0;
-	for (int i = 0; i < WORD_SIZE; i++)
+	int size = sizeof (typeof (*uaddr));
+	for (int i = 0; i < WORD_SIZE; i ++)
 	{
 		int byte = get_user_safe (uaddr + i);
 
@@ -98,19 +99,4 @@ bool
 syscall_invalid_arg (struct intr_frame *if_, int arg_num)
 {
 	return syscall_get_arg (if_, arg_num) == ERROR;
-}
-
-/* Populates argv array. If at any point an argument is invalid
-	 (i.e. not enough arguments provided), returns false */
-bool
-syscall_get_args (struct intr_frame *if_, int argc, char** argv)
-{
-	for (int i = 0; i < argc; i++)
-	{
-		int32_t syscall_arg = syscall_get_arg (if_, i + 1);
-		if (syscall_arg == ERROR)
-			return false;
-		argv[i] = (char *) &syscall_arg;
-	}
-	return true;
 }
