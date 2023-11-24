@@ -140,6 +140,9 @@ page_fault (struct intr_frame *f)
 	page_fault_cnt++;
 
 #ifdef USERPROG
+	/* Copy eax value to eip. */
+	f->eip = (void *) f->eax;
+	/* Set eax value to -1. */
 	f->eax = ERROR;
 	terminate_userprog (ERROR);
 #else

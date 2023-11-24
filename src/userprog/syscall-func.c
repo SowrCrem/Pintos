@@ -97,7 +97,7 @@ create (const char *file, unsigned initial_size)
 {
 	if (get_user_safe ((uint8_t *) file) == ERROR)
 	{
-		return false;
+		terminate_userprog (ERROR);
 	}
 
 	lock_acquire (&filesys_lock);
@@ -198,9 +198,12 @@ filesize (int fd)
 static int
 read (int fd, void *buffer, unsigned size)
 {
-	if (get_user_safe ((uint8_t *) buffer) == ERROR)
+	for (unsigned i = 0; i < size; i++)
 	{
-		terminate_userprog (ERROR);			/* read-bad-ptr fails without termination. */
+		if (get_user_safe ((uint8_t *)(buffer + i)) == ERROR)
+		{
+			terminate_userprog (ERROR);		/* read-bad-ptr fails without termination. */
+		}
 	}
 
 	/* Cannot read from standard output. */
@@ -242,9 +245,12 @@ static int
 write (int fd, const void *buffer, unsigned size)
 {
 	/* Terminate process if buffer pointer is invalid. */
-	if (get_user_safe ((uint8_t *) buffer) == ERROR)
+	for (int i = 0; i < size; i++)
 	{
-		return ERROR;
+		if (get_user_safe ((uint8_t *)(buffer + i)) == ERROR)
+		{
+			terminate_userprog (ERROR);
+		}
 	}
 	
 	if (fd == STDIN_FILENO)
