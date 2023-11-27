@@ -1,9 +1,9 @@
-#include "vm/frame.h"
-#include "threads/thread.h"
-#include "threads/synch.h"
-#include "threads/palloc.h"
-#include "lib/kernel/hash.h"
-#include "lib/debug.h"
+#include "../vm/frame.h"
+#include "../threads/thread.h"
+#include "../threads/synch.h"
+#include "../threads/palloc.h"
+#include "../lib/kernel/hash.h"
+#include "../lib/debug.h"
 
 /* Global frame table. */
 static struct hash frame_table;

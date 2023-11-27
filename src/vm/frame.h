@@ -3,8 +3,8 @@
 
 #include <stdbool.h>
 #include <stdint.h>
-#include "threads/palloc.h"
-#include "lib/kernel/hash.h"
+#include "../threads/palloc.h"
+#include "../lib/kernel/hash.h"
 
 /* Frame table entry structure. */
 struct frame_table_entry
