@@ -140,6 +140,13 @@ page_fault (struct intr_frame *f)
 	page_fault_cnt++;
 
 #ifdef USERPROG
+	/* TODO: Add page fault handling - lazy loading, stack growth,
+	   before killing.
+	   
+	   Return to redo the last instruction, make sure the page is
+	   correctly loaded. */
+
+
 	/* Copy eax value to eip. */
 	f->eip = (void *) f->eax;
 	/* Set eax value to -1. */
