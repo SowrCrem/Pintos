@@ -146,6 +146,8 @@ page_fault (struct intr_frame *f)
 	   Return to redo the last instruction, make sure the page is
 	   correctly loaded. */
 
+	/* TODO: Lazy load the page. */
+	
 
 	/* Copy eax value to eip. */
 	f->eip = (void *) f->eax;

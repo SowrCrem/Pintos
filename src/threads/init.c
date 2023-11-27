@@ -32,6 +32,7 @@
 #include "tests/threads/tests.h"
 #endif
 #ifdef VM
+#include "vm/frame.h"
 #include "devices/swap.h"
 #endif
 #ifdef FILESYS
@@ -131,6 +132,8 @@ main (void)
 #endif
 
 #ifdef VM
+  /* Initialise the frame table. */
+  frame_init ();
   /* Initialise the swap disk */  
   swap_init ();
 #endif

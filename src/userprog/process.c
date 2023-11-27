@@ -1,3 +1,4 @@
+#include "../vm/frame.h"
 #include "../userprog/process.h"
 #include "../userprog/gdt.h"
 #include "../userprog/pagedir.h"
@@ -799,6 +800,10 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 	ASSERT (pg_ofs (upage) == 0);
 	ASSERT (ofs % PGSIZE == 0);
 
+	/* Lazy load the pages. */
+
+	/* TODO: Add SPT entries for all the flags. */
+
 	file_seek (file, ofs);
 	while (read_bytes > 0 || zero_bytes > 0)
 	{
@@ -815,29 +820,38 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		if (kpage == NULL){
 
 			/* Get a new page of memory. */
+			// kpage = frame_allocate ();
 			kpage = palloc_get_page (PAL_USER);
 			if (kpage == NULL){
 				return false;
 			}
 
+			/* TODO: Add thread, upage, kpage, etc to SPT. */
+
 			/* Add the page to the process's address space. */
 			if (!install_page (upage, kpage, writable))
 			{
+				// frame_free (kpage);
 				palloc_free_page (kpage);
 				return false;
 			}
 
 		} else {
 
+			/* TODO: If already in SPT, re-insert with writable OR'd.
+				 
+				 page_read_bytes should be greater than retrieved entry. */
+
+
 			/* Check if writable flag for the page should be updated */
-			if(writable && !pagedir_is_writable(t->pagedir, upage)){
-				pagedir_set_writable(t->pagedir, upage, writable);
+			if (writable && !pagedir_is_writable (t->pagedir, upage)) {
+				pagedir_set_writable (t->pagedir, upage, writable);
 			}
 
 		}
 
 		/* Load data into the page. */
-		if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes){
+		if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes) {
 			return false;
 		}
 		memset (kpage + page_read_bytes, 0, page_zero_bytes);
