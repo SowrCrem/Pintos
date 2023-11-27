@@ -7,10 +7,10 @@
 #include "lib/kernel/hash.h"
 
 /* Frame table entry structure. */
-struct frame
+struct frame_table_entry
 {
-  struct thread *owner;    /* Owning thread. */
-  void *page;               /* Corresponding kernel virtual adress pointer. */
+  struct thread *owner;     /* Owning thread. */
+  void *page;               /* Corresponding kernel virtual address pointer. */
 
   struct hash_elem elem;    /* Hash element for frame table. */
 };

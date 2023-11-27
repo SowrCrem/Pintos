@@ -220,19 +220,19 @@ rs_manager_free (struct rs_manager *rs)
 		struct list_elem *e = list_pop_front (&rs->children);
 		struct rs_manager *child = list_entry (e, struct rs_manager, child_elem);
 
-		lock_acquire (&child->exit_lock);
+		struct lock *l = &child->exit_lock;
+		lock_acquire (l);
 		if (!child->running)
 		{
 			/* If child process is not running, free its rs_manager. */
-			lock_release (&child->exit_lock);
 			free (child);
 		} 
 		else
 		{
 			/* Set child's parent_rs_manager to NULL. */
 			child->parent_rs_manager = NULL;
-			lock_release (&child->exit_lock);
 		}
+		lock_release (l);
 	}
 
 	/* Free the file descriptor table and close executable file. */
@@ -246,12 +246,12 @@ rs_manager_free (struct rs_manager *rs)
 
 	lock_release (&filesys_lock);
 
-	lock_acquire (&rs->exit_lock);
+	struct lock *l = &rs->exit_lock;
+	lock_acquire (l);
 	/* If it does not have a parent rs_manager. */
 	if (rs->parent_rs_manager == NULL)
 	{
 		/* Free parent rs_manager if RS parent process has exited. */
-		lock_release (&rs->exit_lock);
 		free (rs);
 	} 
 	else /* If current process does have a parent rs_manager. */
@@ -259,8 +259,8 @@ rs_manager_free (struct rs_manager *rs)
 		rs->running = false;
 		/* Increment semaphore to allow parent to return from wait. */
 		sema_up (&rs->child_exit_sema);
-		lock_release (&rs->exit_lock);
 	}
+	lock_release (l);
 }
 
 
@@ -335,6 +335,53 @@ process_wait (tid_t child_tid)
 	return exit_status;
 }
 
+/* Supplementary page table wrapper struct. */
+struct spage_table
+{
+	struct hash spt; 						/* Hash table for supplemental page table. */
+};
+
+/* Represents an entry in the hash table for supplemental page table. */
+struct spt_entry
+{
+	struct file *file;          /* File pointer. */
+	off_t ofs;                  /* Offset of page in file. */
+	uint8_t *upage;             /* User virtual page. */
+	size_t page_read_bytes;     /* Number of bytes to read from file. */
+	size_t page_zero_bytes;     /* Number of bytes to zero. */
+	bool writable;              /* True if page is writable. */
+	
+	bool loaded;                /* True if page is loaded. */
+	bool swapped;               /* True if page is swapped. */
+	
+	struct hash_elem elem; 			/* Hash table element. */
+};
+
+/* Supplemental page table hash function. */
+unsigned 
+spage_hash (const struct hash_elem *e, void *aux UNUSED)
+{
+	const struct spt_entry *spte = hash_entry (e, struct spt_entry, elem);
+	return hash_bytes (&spte->upage, sizeof spte->upage);
+}
+
+/* Supplemental page table comparison function. */
+bool 
+spage_less (const struct hash_elem *a, const struct hash_elem *b, 
+						void *aux UNUSED)
+{
+	const struct spt_entry *spte_a = hash_entry (a, struct spt_entry, elem);
+	const struct spt_entry *spte_b = hash_entry (b, struct spt_entry, elem);
+	return spte_a->upage < spte_b->upage;
+}
+
+/* Frees every spt_entry. */
+void
+spage_destroy_func (struct hash_elem *e_, void *aux UNUSED)
+{
+	struct spt_entry *e = hash_entry (e_, struct spt_entry, elem);
+	free (e);
+}
 
 /* Free the current process's resources. */
 void
@@ -346,6 +393,10 @@ process_exit (void)
 	/* Increments child_exit_sema so parent process can return from
 		 wait. Also frees memory for rs_manager if certain conditions met. */
 	rs_manager_free (cur->rs_manager);
+	
+	/* Destroy the current process's supplemental page table. */
+	hash_destroy (&cur->spage_table->spt, &spage_destroy_func);
+	free (cur->spage_table);
 
 	/* Destroy the current process's page directory and switch back
 		 to the kernel-only page directory. */
@@ -627,6 +678,10 @@ load (const char *file_name, void (**eip) (void), void **esp)
 		goto done;
 	process_activate ();
 
+	/* Initialise supplemental page table for current thread. */
+	t->spage_table = malloc (sizeof (struct spage_table));
+	hash_init (&t->spage_table->spt, &spage_hash, &spage_less, NULL);
+
 	/* Open executable file. */
 	lock_acquire (&filesys_lock);
 	file = filesys_open (file_name);
@@ -820,9 +875,9 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		if (kpage == NULL){
 
 			/* Get a new page of memory. */
-			// kpage = frame_allocate ();
-			kpage = palloc_get_page (PAL_USER);
-			if (kpage == NULL){
+			kpage = frame_allocate ();
+			// kpage = palloc_get_page (PAL_USER);
+			if (kpage == NULL) {
 				return false;
 			}
 
@@ -831,8 +886,8 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 			/* Add the page to the process's address space. */
 			if (!install_page (upage, kpage, writable))
 			{
-				// frame_free (kpage);
-				palloc_free_page (kpage);
+				frame_free (kpage);
+				// palloc_free_page (kpage);
 				return false;
 			}
 
