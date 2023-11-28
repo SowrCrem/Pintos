@@ -18,17 +18,11 @@ typedef int tid_t;
 /* Number of characters allowed to be processed from command line. */
 #define MAX_CMDLINE_LEN (128)
 
-/* Supplementary page table wrapper struct. */
-struct spage_table
-{
-	struct hash spt; 						/* Hash table for supplemental page table. */
-};
-
 /* Represents an entry in the hash table for supplemental page table. */
 struct spt_entry
 {
 	uint8_t *upage;             /* User virtual page. */
-  
+
 	struct file *file;          /* File pointer. */
 	off_t ofs;                  /* Offset of page in file. */
 	size_t page_read_bytes;     /* Number of bytes to read from file. */
@@ -40,6 +34,9 @@ struct spt_entry
 	
 	struct hash_elem elem; 			/* Hash table element. */
 };
+
+bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
+                   uint32_t read_bytes, uint32_t zero_bytes, bool writable);
 
 /* Represents an entry in the hash table for files held by a process. */
 struct file_entry

@@ -10,7 +10,7 @@
 struct frame_table_entry
 {
   struct thread *owner;     /* Owning thread. */
-  void *page;               /* Corresponding kernel virtual address pointer. */
+  void *kpage;               /* Corresponding kernel virtual address pointer. */
 
   struct hash_elem elem;    /* Hash element for frame table. */
 };

@@ -1,10 +1,12 @@
+#include "../lib/inttypes.h"
+#include "../lib/stdio.h"
 #include "userprog/exception.h"
-#include <inttypes.h>
-#include <stdio.h>
 #include "userprog/gdt.h"
+#include "userprog/syscall.h"
+#include "userprog/process.h"
 #include "threads/interrupt.h"
 #include "threads/thread.h"
-#include "userprog/syscall.h"
+#include "threads/vaddr.h"
 
 /* Number of page faults processed. */
 static long long page_fault_cnt;
@@ -132,6 +134,9 @@ page_fault (struct intr_frame *f)
 		 (#PF)". */
 	asm ("movl %%cr2, %0" : "=r" (fault_addr));
 
+
+	printf ("(page-fault) fault_addr: %d\n", fault_addr);
+
 	/* Turn interrupts back on (they were only off so that we could
 		 be assured of reading CR2 before it changed). */
 	intr_enable ();
@@ -140,13 +145,37 @@ page_fault (struct intr_frame *f)
 	page_fault_cnt++;
 
 #ifdef USERPROG
-	/* TODO: Add page fault handling - lazy loading, stack growth,
-	   before killing.
-	   
-	   Return to redo the last instruction, make sure the page is
-	   correctly loaded. */
+	#ifdef VM
 
-	/* TODO: Lazy load the page. */
+	/* Get current thread. */
+	struct thread *t = thread_current ();
+
+	/* Get supplemental page table. */
+	struct hash *spt = t->spage_table;
+
+	/* Get supplemental page table entry. */
+	void *upage = pg_round_down (fault_addr);
+	struct spt_entry spte;
+	spte.upage = upage;
+
+	struct hash_elem *h = hash_find (spt, &spte.elem);
+
+	if (h != NULL) {
+		struct spt_entry *spte = hash_entry (h, struct spt_entry, elem);
+
+		/* Load page. */
+		if (load_segment (spte->file, spte->ofs, spte->upage, 
+											 spte->page_read_bytes, spte->page_zero_bytes, 
+											 spte->writable))
+		{
+			printf ("(page-fault) successfully loaded %d into memory\n", spte->upage);
+			return;
+		}
+	} 
+	
+
+
+	#endif
 	
 
 	/* Copy eax value to eip. */

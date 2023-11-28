@@ -377,8 +377,8 @@ process_exit (void)
 	
 	#ifdef VM
 		/* Destroy the current process's supplemental page table. */
-		hash_destroy (&cur->spage_table->spt, &spage_destroy_func);
-		free (cur->spage_table);
+		hash_destroy (cur->spage_table, &spage_destroy_func);
+		// free (cur->spage_table);
 	#endif
 
 	/* Destroy the current process's page directory and switch back
@@ -637,7 +637,7 @@ struct Elf32_Phdr
 
 static bool setup_stack (void **esp);
 static bool validate_segment (const struct Elf32_Phdr *, struct file *);
-static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
+static bool lazy_load_segment (struct file *file, off_t ofs, uint8_t *upage,
                           uint32_t read_bytes, uint32_t zero_bytes,
                           bool writable);
 
@@ -663,8 +663,8 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
 	#ifdef VM
 		/* Initialise supplemental page table for current thread. */
-		t->spage_table = malloc (sizeof (struct spage_table));
-		hash_init (&t->spage_table->spt, &spage_hash, &spage_less, NULL);
+		// t->spage_table = malloc (sizeof (struct spage_table));
+		hash_init (t->spage_table, &spage_hash, &spage_less, NULL);
 	#endif
 
 	/* Open executable file. */
@@ -739,7 +739,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
 						read_bytes = 0;
 						zero_bytes = ROUND_UP (page_offset + phdr.p_memsz, PGSIZE);
 					}
-					if (!load_segment (file, file_page, (void *) mem_page,
+					if (!lazy_load_segment (file, file_page, (void *) mem_page,
 					                   read_bytes, zero_bytes, writable))
 						goto done;
 				}
@@ -818,6 +818,78 @@ validate_segment (const struct Elf32_Phdr *phdr, struct file *file)
 	return true;
 }
 
+/* Lazy loads the file into the supplemental page table, to be loadede
+	 into memory on demand. */
+static bool
+lazy_load_segment (struct file *file, off_t ofs, uint8_t *upage,
+              uint32_t read_bytes, uint32_t zero_bytes, bool writable)
+{
+	ASSERT ((read_bytes + zero_bytes) % PGSIZE == 0);
+	ASSERT (pg_ofs (upage) == 0);
+	ASSERT (ofs % PGSIZE == 0);
+
+	/* Lazy load the pages. */
+
+	file_seek (file, ofs);
+	while (read_bytes > 0 || zero_bytes > 0)
+	{
+		/* Calculate how to fill this page.
+			 We will read PAGE_READ_BYTES bytes from FILE
+			 and zero the final PAGE_ZERO_BYTES bytes. */
+		size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
+		size_t page_zero_bytes = PGSIZE - page_read_bytes;
+
+		/* Check if virtual page already allocated */
+		struct thread *t = thread_current ();
+		
+		/* Check if upage pointer already in supplemental page table. */
+		struct spt_entry s_find;
+		s_find.upage = upage;
+
+		struct hash_elem *found = hash_find (t->spage_table, &s_find.elem);
+		
+		/* Insert new page entry into supplemental page table, if found is NULL. */
+		if (found == NULL)
+		{
+			struct spt_entry *spte = malloc (sizeof (struct spt_entry));
+
+			spte->upage = upage;
+			spte->file = file;
+			spte->ofs = ofs;
+			spte->page_read_bytes = page_read_bytes;
+			spte->page_zero_bytes = page_zero_bytes;
+			spte->writable = writable;
+			spte->loaded = false;
+
+			struct hash_elem *h = hash_insert (t->spage_table, &spte->elem);
+
+			if (h == NULL)
+				printf ("(lazy_load_segment) page %d success\n", upage);
+		}
+		else	/* If already in supplemental page table. */
+		{
+			/* Check if writable flag for the page should be updated. */
+			struct spt_entry *spte = hash_entry (found, struct spt_entry, elem);
+
+			if (writable && !spte->writable){
+				spte->writable = writable;
+
+				struct hash_elem *h = hash_replace (t->spage_table, &spte->elem);
+
+				if (h != NULL)
+					printf ("(lazy_load_segment) page %d writable flag updated\n", upage);
+			}
+		}
+
+		/* Advance. */
+		read_bytes -= page_read_bytes;
+		zero_bytes -= page_zero_bytes;
+		upage += PGSIZE;
+		ofs += PGSIZE;		/* CHECK IF IT IS page_read_bytes, not PGSIZE. */
+	}
+	return true;
+}
+
 /* Loads a segment starting at offset OFS in FILE at address
    UPAGE.  In total, READ_BYTES + ZERO_BYTES bytes of virtual
    memory are initialized, as follows:
@@ -832,17 +904,13 @@ validate_segment (const struct Elf32_Phdr *phdr, struct file *file)
 
    Return true if successful, false if a memory allocation error
    or disk read error occurs. */
-static bool
+bool
 load_segment (struct file *file, off_t ofs, uint8_t *upage,
               uint32_t read_bytes, uint32_t zero_bytes, bool writable)
 {
 	ASSERT ((read_bytes + zero_bytes) % PGSIZE == 0);
 	ASSERT (pg_ofs (upage) == 0);
 	ASSERT (ofs % PGSIZE == 0);
-
-	/* Lazy load the pages. */
-
-	/* TODO: Add SPT entries for all the flags. */
 
 	file_seek (file, ofs);
 	while (read_bytes > 0 || zero_bytes > 0)
@@ -857,41 +925,32 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		struct thread *t = thread_current ();
 		uint8_t *kpage = pagedir_get_page (t->pagedir, upage);
 
-		if (kpage == NULL){
+		if (kpage == NULL) {
 
 			/* Get a new page of memory. */
-			// kpage = frame_allocate ();
 			kpage = palloc_get_page (PAL_USER);
-			if (kpage == NULL) {
+			if (kpage == NULL){
 				return false;
 			}
-
-			/* TODO: Add thread, upage, kpage, etc to SPT. */
 
 			/* Add the page to the process's address space. */
 			if (!install_page (upage, kpage, writable))
 			{
-				// frame_free (kpage);
 				palloc_free_page (kpage);
 				return false;
 			}
 
 		} else {
 
-			/* TODO: If already in SPT, re-insert with writable OR'd.
-				 
-				 page_read_bytes should be greater than retrieved entry. */
-
-
 			/* Check if writable flag for the page should be updated */
-			if (writable && !pagedir_is_writable (t->pagedir, upage)) {
-				pagedir_set_writable (t->pagedir, upage, writable);
+			if(writable && !pagedir_is_writable(t->pagedir, upage)){
+				pagedir_set_writable(t->pagedir, upage, writable);
 			}
 
 		}
 
 		/* Load data into the page. */
-		if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes) {
+		if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes){
 			return false;
 		}
 		memset (kpage + page_read_bytes, 0, page_zero_bytes);
@@ -903,6 +962,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 	}
 	return true;
 }
+
 
 /* Create a minimal stack by mapping a zeroed page at the top of
    user virtual memory. */

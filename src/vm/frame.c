@@ -18,7 +18,7 @@ frame_hash (const struct hash_elem *elem, void *aux UNUSED)
 {
   const struct frame_table_entry *entry = 
       hash_entry (elem, struct frame_table_entry, elem);
-  return hash_bytes (&entry->page, sizeof (entry->page));
+  return hash_bytes (&entry->kpage, sizeof (entry->kpage));
 }
 
 /* Frame table comparison function. */
@@ -44,13 +44,13 @@ frame_init (void)
 void *
 frame_allocate (void)
 {
-  void *page = palloc_get_page (PAL_USER);
+  void *kpage = palloc_get_page (PAL_USER);
   
-  if (page != NULL)
+  if (kpage != NULL)
   {
     struct frame_table_entry *entry = malloc (sizeof (struct frame_table_entry));
     entry->owner = thread_current ();
-    entry->page = page;
+    entry->kpage = kpage;
 
     lock_acquire (&frame_table_lock);
       hash_insert (&frame_table, &entry->elem); 
@@ -65,7 +65,7 @@ frame_allocate (void)
         panic kernel. */
   }
 
-  return page;
+  return kpage;
 }
 
 /* Frees the frame FRAME.
@@ -75,7 +75,7 @@ void
 frame_free (void *page) 
 {
   struct frame_table_entry *entry = malloc (sizeof (struct frame_table_entry));
-  entry->page = page;
+  entry->kpage = page;
 
   lock_acquire (&frame_table_lock);
 

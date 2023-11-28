@@ -6,8 +6,8 @@
 #include <stdint.h>
 #include "../userprog/process.h"
 
-// #define USERPROG 1      /* TODO: For testing purposes - ask UTA */
-// #define VM 1 
+#define USERPROG 1      /* TODO: For testing purposes - ask UTA */
+#define VM 1
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -105,7 +105,8 @@ struct thread
 
     #ifdef VM
     /* Owned by vm/frame.c. */
-    struct spage_table *spage_table;    /* Pointer to supplemental page table. */
+    struct hash *spage_table;           /* Pointer to supplemental page table. */
+    // struct spage_table *spage_table;    /* Pointer to supplemental page table. */
     #endif
 
     /* Owned by thread.c. */
