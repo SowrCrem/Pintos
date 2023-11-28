@@ -680,9 +680,11 @@ load (const char *file_name, void (**eip) (void), void **esp)
 		goto done;
 	process_activate ();
 
-	/* Initialise supplemental page table for current thread. */
-	t->spage_table = malloc (sizeof (struct spage_table));
-	hash_init (&t->spage_table->spt, &spage_hash, &spage_less, NULL);
+	#ifdef VM
+		/* Initialise supplemental page table for current thread. */
+		t->spage_table = malloc (sizeof (struct spage_table));
+		hash_init (&t->spage_table->spt, &spage_hash, &spage_less, NULL);
+	#endif
 
 	/* Open executable file. */
 	lock_acquire (&filesys_lock);
