@@ -378,7 +378,10 @@ process_exit (void)
 	#ifdef VM
 		/* Destroy the current process's supplemental page table. */
 		hash_destroy (cur->spage_table, &spage_destroy_func);
-		// free (cur->spage_table);
+		free (cur->spage_table);
+
+		/* Remove all frames owned by thread. */
+		frame_remove_all (cur);
 	#endif
 
 	/* Destroy the current process's page directory and switch back
@@ -665,7 +668,6 @@ load (const char *file_name, void (**eip) (void), void **esp)
 		/* Initialise supplemental page table for current thread. */
 		t->spage_table = malloc (sizeof (struct hash));
 		hash_init (t->spage_table, &spage_hash, &spage_less, NULL);
-
 	#endif
 
 	/* Open executable file. */

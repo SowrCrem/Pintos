@@ -133,7 +133,7 @@ main (void)
 
 #ifdef VM
   /* Initialise the frame table. */
-  frame_init ();
+  frame_table_init ();
   /* Initialise the swap disk */  
   swap_init ();
 #endif

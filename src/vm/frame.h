@@ -1,8 +1,9 @@
 #ifndef VM_FRAME_H
 #define VM_FRAME_H
 
-#include <stdbool.h>
-#include <stdint.h>
+#include "../lib/stdbool.h"
+#include "../lib/stdint.h"
+#include "../threads/thread.h"
 #include "../threads/palloc.h"
 #include "../lib/kernel/hash.h"
 
@@ -16,8 +17,9 @@ struct frame_table_entry
 };
 
 /* Frame table functions. */
-void frame_init (void);
+void frame_table_init (void);
 void *frame_allocate (void);
 void frame_free (void *);
+void frame_remove_all (struct thread *);
 
 #endif /* vm/frame.h */

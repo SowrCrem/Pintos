@@ -29,14 +29,21 @@ frame_less (const struct hash_elem *a, const struct hash_elem *b,
   return frame_hash (a, NULL) < frame_hash (b, NULL);
 }
 
+/* Frame table destroy function. */
+void
+frame_destroy_func (struct hash_elem *elem, void *aux UNUSED)
+{
+  struct frame_table_entry *entry = hash_entry (elem, struct frame_table_entry, elem);
+  free (entry);
+}
+
 /* Initialises the frame table. */
 void 
-frame_init (void) 
+frame_table_init (void) 
 {
   hash_init (&frame_table, frame_hash, frame_less, NULL);
   lock_init (&frame_table_lock);
 }
-
 
 /* Allocate a new frame and returns the pointer to the page.
     
@@ -72,10 +79,10 @@ frame_allocate (void)
 
    Wrapper for palloc_free_page. */
 void 
-frame_free (void *page) 
+frame_free (void *kpage) 
 {
   struct frame_table_entry *entry = malloc (sizeof (struct frame_table_entry));
-  entry->kpage = page;
+  entry->kpage = kpage;
 
   lock_acquire (&frame_table_lock);
 
@@ -86,11 +93,30 @@ frame_free (void *page)
       hash_delete (&frame_table, &entry->elem);
       
       /* Free page (implicitly synchronized). */
-      palloc_free_page (page);
+      palloc_free_page (kpage);
       // palloc_free_page (entry->page);
 
       free (entry);
     }
 
   lock_release(&frame_table_lock);
+}
+
+/* Remove all frames that are owned by thread THREAD.
+
+   Called on process exit. */
+void
+frame_remove_all (struct thread *thread)
+{
+  struct hash_iterator i;
+  hash_first (&i, &frame_table);
+  while (hash_next (&i))
+  {
+    struct frame_table_entry *entry = hash_entry (hash_cur (&i), struct frame_table_entry, elem);
+    if (entry->owner == thread)
+    {
+      hash_delete (&frame_table, &entry->elem);
+      free (entry);
+    }
+  }
 }

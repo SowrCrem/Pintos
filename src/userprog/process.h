@@ -76,7 +76,6 @@ void rs_manager_init (struct rs_manager *parent, struct thread *child);
 struct rs_manager * get_child (struct thread *, tid_t);
 struct file_entry * file_entry_lookup (int );
 
-
 tid_t process_execute (const char *);
 int process_wait (tid_t);
 void process_exit (void);
