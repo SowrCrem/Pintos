@@ -245,7 +245,7 @@ static int
 write (int fd, const void *buffer, unsigned size)
 {
 	/* Terminate process if buffer pointer is invalid. */
-	for (int i = 0; i < size; i++)
+	for (int i = 0; i < (int) size; i++)
 	{
 		if (get_user_safe ((uint8_t *)(buffer + i)) == ERROR)
 		{

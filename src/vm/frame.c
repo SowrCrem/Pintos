@@ -1,6 +1,7 @@
 #include "../vm/frame.h"
 #include "../threads/thread.h"
 #include "../threads/synch.h"
+#include "../threads/malloc.h"
 #include "../threads/palloc.h"
 #include "../lib/kernel/hash.h"
 #include "../lib/debug.h"
@@ -12,7 +13,7 @@ static struct hash frame_table;
 static struct lock frame_table_lock;
 
 /* Frame table hash function. */
-unsigned 
+static unsigned 
 frame_hash (const struct hash_elem *elem, void *aux UNUSED) 
 {
   const struct frame_table_entry *entry = 
@@ -21,7 +22,7 @@ frame_hash (const struct hash_elem *elem, void *aux UNUSED)
 }
 
 /* Frame table comparison function. */
-bool 
+static bool 
 frame_less (const struct hash_elem *a, const struct hash_elem *b, 
             void *aux UNUSED) 
 {
@@ -73,7 +74,8 @@ frame_allocate (void)
 void 
 frame_free (void *page) 
 {
-  struct frame_table_entry *entry;
+  struct frame_table_entry *entry = malloc (sizeof (struct frame_table_entry));
+  entry->page = page;
 
   lock_acquire (&frame_table_lock);
 

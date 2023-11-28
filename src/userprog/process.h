@@ -1,10 +1,9 @@
 #ifndef USERPROG_PROCESS_H
 #define USERPROG_PROCESS_H
 
-#include "threads/thread.h"
-#include "threads/synch.h"
-#include <list.h>
-#include <hash.h>
+#include "../threads/synch.h"
+#include "../lib/kernel/hash.h"
+#include "../filesys/off_t.h"
 
 /* Code duplication from thread.h, however, does not compile without. */
 typedef int tid_t;
@@ -18,6 +17,29 @@ typedef int tid_t;
 
 /* Number of characters allowed to be processed from command line. */
 #define MAX_CMDLINE_LEN (128)
+
+/* Supplementary page table wrapper struct. */
+struct spage_table
+{
+	struct hash spt; 						/* Hash table for supplemental page table. */
+};
+
+/* Represents an entry in the hash table for supplemental page table. */
+struct spt_entry
+{
+	uint8_t *upage;             /* User virtual page. */
+  
+	struct file *file;          /* File pointer. */
+	off_t ofs;                  /* Offset of page in file. */
+	size_t page_read_bytes;     /* Number of bytes to read from file. */
+	size_t page_zero_bytes;     /* Number of bytes to zero. */
+	bool writable;              /* True if page is writable. */
+	
+	bool loaded;                /* True if page is loaded. */
+	// bool swapped;               /* True if page is swapped. */
+	
+	struct hash_elem elem; 			/* Hash table element. */
+};
 
 /* Represents an entry in the hash table for files held by a process. */
 struct file_entry
@@ -53,7 +75,7 @@ struct rs_manager
   int exit_status;                        /* Exit status of process. */
 };
 
-void rs_manager_init (struct rs_manager *, struct thread *);
+void rs_manager_init (struct rs_manager *parent, struct thread *child);
 struct rs_manager * get_child (struct thread *, tid_t);
 struct file_entry * file_entry_lookup (int );
 

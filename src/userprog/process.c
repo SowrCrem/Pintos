@@ -1,24 +1,24 @@
-#include "../vm/frame.h"
 #include "../userprog/process.h"
 #include "../userprog/gdt.h"
 #include "../userprog/pagedir.h"
 #include "../userprog/tss.h"
+#include "../filesys/off_t.h"
 #include "../filesys/directory.h"
 #include "../filesys/file.h"
 #include "../filesys/filesys.h"
 #include "../threads/flags.h"
 #include "../threads/init.h"
 #include "../threads/interrupt.h"
+#include "../threads/synch.h"
 #include "../threads/palloc.h"
 #include "../threads/thread.h"
 #include "../threads/vaddr.h"
 #include "../threads/malloc.h"
+#include "../vm/frame.h"
 #include "../lib/string.h"
-#include <debug.h>
-#include <inttypes.h>
-#include <round.h>
-#include <stdio.h>
-#include <string.h>
+#include "../lib/debug.h"
+#include "../lib/stdio.h"
+#include "../lib/round.h"
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
@@ -335,30 +335,11 @@ process_wait (tid_t child_tid)
 	return exit_status;
 }
 
-/* Supplementary page table wrapper struct. */
-struct spage_table
-{
-	struct hash spt; 						/* Hash table for supplemental page table. */
-};
 
-/* Represents an entry in the hash table for supplemental page table. */
-struct spt_entry
-{
-	struct file *file;          /* File pointer. */
-	off_t ofs;                  /* Offset of page in file. */
-	uint8_t *upage;             /* User virtual page. */
-	size_t page_read_bytes;     /* Number of bytes to read from file. */
-	size_t page_zero_bytes;     /* Number of bytes to zero. */
-	bool writable;              /* True if page is writable. */
-	
-	bool loaded;                /* True if page is loaded. */
-	bool swapped;               /* True if page is swapped. */
-	
-	struct hash_elem elem; 			/* Hash table element. */
-};
+/* SUPPLEMENTAL PAGE TABLE STRUCT AND FUNCTIONS*/
 
 /* Supplemental page table hash function. */
-unsigned 
+static unsigned 
 spage_hash (const struct hash_elem *e, void *aux UNUSED)
 {
 	const struct spt_entry *spte = hash_entry (e, struct spt_entry, elem);
@@ -366,7 +347,7 @@ spage_hash (const struct hash_elem *e, void *aux UNUSED)
 }
 
 /* Supplemental page table comparison function. */
-bool 
+static bool 
 spage_less (const struct hash_elem *a, const struct hash_elem *b, 
 						void *aux UNUSED)
 {
@@ -376,7 +357,7 @@ spage_less (const struct hash_elem *a, const struct hash_elem *b,
 }
 
 /* Frees every spt_entry. */
-void
+static void
 spage_destroy_func (struct hash_elem *e_, void *aux UNUSED)
 {
 	struct spt_entry *e = hash_entry (e_, struct spt_entry, elem);
