@@ -135,7 +135,7 @@ page_fault (struct intr_frame *f)
 	asm ("movl %%cr2, %0" : "=r" (fault_addr));
 
 
-	printf ("(page-fault) fault_addr: %d\n", fault_addr);
+	// printf ("(page-fault) fault_addr: %d\n", fault_addr);
 
 	/* Turn interrupts back on (they were only off so that we could
 		 be assured of reading CR2 before it changed). */
@@ -168,7 +168,7 @@ page_fault (struct intr_frame *f)
 											 spte->page_read_bytes, spte->page_zero_bytes, 
 											 spte->writable))
 		{
-			printf ("(page-fault) successfully loaded %d into memory\n", spte->upage);
+			// printf ("(page-fault) successfully loaded %d into memory\n", spte->upage);
 			return;
 		}
 	} 

@@ -845,7 +845,7 @@ lazy_load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		
 		/* Check if upage pointer already in supplemental page table. */
 		struct spt_entry s_find;
-		s_find.upage = upage;
+		s_find.upage = pg_round_down (upage);
 
 		struct hash_elem *found = hash_find (t->spage_table, &s_find.elem);
 		
@@ -864,22 +864,32 @@ lazy_load_segment (struct file *file, off_t ofs, uint8_t *upage,
 
 			struct hash_elem *h = hash_insert (t->spage_table, &spte->elem);
 
-			if (h == NULL)
-				printf ("(lazy_load_segment) page %d success\n", upage);
+			// if (h == NULL)
+			// 	printf ("(lazy_load_segment) page %d success\n", upage);
 		}
 		else	/* If already in supplemental page table. */
 		{
+			// printf ("(lazy_load_segment) trying to replace %d\n", upage);
+
 			/* Check if writable flag for the page should be updated. */
 			struct spt_entry *spte = hash_entry (found, struct spt_entry, elem);
 
-			if (writable && !spte->writable){
+			if (writable && !spte->writable) 
+			{
 				spte->writable = writable;
-
-				struct hash_elem *h = hash_replace (t->spage_table, &spte->elem);
-
-				if (h != NULL)
-					printf ("(lazy_load_segment) page %d writable flag updated\n", upage);
 			}
+			spte->page_read_bytes = page_read_bytes;
+			spte->page_zero_bytes = page_zero_bytes;
+
+			struct hash_elem *h = hash_replace (t->spage_table, &spte->elem);
+
+			// if (h != &spte->elem)
+			// 	printf ("(lazy_load_segment) page %d writable flag updated\n", upage);
+			// else
+			// 	printf ("(lazy_load_segment) page %d writable flag update failed\n", upage);	
+
+			/* Accounting for offset being incremented by PGSIZE twice for one page. */
+			// ofs -= PGSIZE;
 		}
 
 		/* Advance. */
