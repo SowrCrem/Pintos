@@ -663,8 +663,9 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
 	#ifdef VM
 		/* Initialise supplemental page table for current thread. */
-		// t->spage_table = malloc (sizeof (struct spage_table));
+		t->spage_table = malloc (sizeof (struct hash));
 		hash_init (t->spage_table, &spage_hash, &spage_less, NULL);
+
 	#endif
 
 	/* Open executable file. */
@@ -928,7 +929,8 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		if (kpage == NULL) {
 
 			/* Get a new page of memory. */
-			kpage = palloc_get_page (PAL_USER);
+			// kpage = palloc_get_page (PAL_USER);
+			kpage = frame_allocate ();
 			if (kpage == NULL){
 				return false;
 			}
@@ -936,7 +938,8 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 			/* Add the page to the process's address space. */
 			if (!install_page (upage, kpage, writable))
 			{
-				palloc_free_page (kpage);
+				// palloc_free_page (kpage);
+				frame_free (kpage);
 				return false;
 			}
 
