@@ -220,10 +220,10 @@ rs_manager_free (struct rs_manager *rs)
 		struct list_elem *e = list_pop_front (&rs->children);
 		struct rs_manager *child = list_entry (e, struct rs_manager, child_elem);
 
-		struct lock *l = &child->exit_lock;
-		lock_acquire (l);
+		lock_acquire (&child->exit_lock);
 		if (!child->running)
 		{
+			lock_release (&child->exit_lock);
 			/* If child process is not running, free its rs_manager. */
 			free (child);
 		} 
@@ -231,8 +231,8 @@ rs_manager_free (struct rs_manager *rs)
 		{
 			/* Set child's parent_rs_manager to NULL. */
 			child->parent_rs_manager = NULL;
+			lock_release (&child->exit_lock);
 		}
-		lock_release (l);
 	}
 
 	/* Free the file descriptor table and close executable file. */
@@ -246,11 +246,11 @@ rs_manager_free (struct rs_manager *rs)
 
 	lock_release (&filesys_lock);
 
-	struct lock *l = &rs->exit_lock;
-	lock_acquire (l);
+	lock_acquire (&rs->exit_lock);
 	/* If it does not have a parent rs_manager. */
 	if (rs->parent_rs_manager == NULL)
 	{
+		lock_release (&rs->exit_lock);
 		/* Free parent rs_manager if RS parent process has exited. */
 		free (rs);
 	} 
@@ -259,9 +259,9 @@ rs_manager_free (struct rs_manager *rs)
 		rs->running = false;
 		/* Increment semaphore to allow parent to return from wait. */
 		sema_up (&rs->child_exit_sema);
+		lock_release (&rs->exit_lock);
 	}
-	lock_release (l);
-}
+	}
 
 
 /* Starts a new thread running a user program loaded from
@@ -394,9 +394,11 @@ process_exit (void)
 		 wait. Also frees memory for rs_manager if certain conditions met. */
 	rs_manager_free (cur->rs_manager);
 	
-	/* Destroy the current process's supplemental page table. */
-	hash_destroy (&cur->spage_table->spt, &spage_destroy_func);
-	free (cur->spage_table);
+	#ifdef VM
+		/* Destroy the current process's supplemental page table. */
+		hash_destroy (&cur->spage_table->spt, &spage_destroy_func);
+		free (cur->spage_table);
+	#endif
 
 	/* Destroy the current process's page directory and switch back
 		 to the kernel-only page directory. */
@@ -875,8 +877,8 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		if (kpage == NULL){
 
 			/* Get a new page of memory. */
-			kpage = frame_allocate ();
-			// kpage = palloc_get_page (PAL_USER);
+			// kpage = frame_allocate ();
+			kpage = palloc_get_page (PAL_USER);
 			if (kpage == NULL) {
 				return false;
 			}
@@ -886,8 +888,8 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 			/* Add the page to the process's address space. */
 			if (!install_page (upage, kpage, writable))
 			{
-				frame_free (kpage);
-				// palloc_free_page (kpage);
+				// frame_free (kpage);
+				palloc_free_page (kpage);
 				return false;
 			}
 
