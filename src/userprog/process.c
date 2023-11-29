@@ -381,7 +381,7 @@ process_exit (void)
 		free (cur->spage_table);
 
 		/* Remove all frames owned by thread. */
-		frame_remove_all (cur);
+		// frame_remove_all (cur);
 	#endif
 
 	/* Destroy the current process's page directory and switch back
