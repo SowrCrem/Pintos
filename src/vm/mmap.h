@@ -4,7 +4,7 @@
 #include "../userprog/process.h"
 
 typedef int mapid_t;
-
+#define PGSIZE (4096)
 
 
 mapid_t mmap_create (struct file_entry *file_entry, void *addr);

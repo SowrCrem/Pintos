@@ -25,6 +25,7 @@ mmap_create (struct file_entry *file_entry, void *addr)
     {
         /* Initialise temporary variable (no of bytes to be read from exec file).*/
         int page_read_bytes = (no_bytes_to_read >= PGSIZE) ? PGSIZE : no_bytes_to_read;
+        int page_zero_bytes = 0;
 
         /* Map page_read_bytes to page. */
 
@@ -37,7 +38,11 @@ mmap_create (struct file_entry *file_entry, void *addr)
 
         } else {
             /* Add page to spt for thread_current. */
-            hash_insert (thre)
+            struct spt_entry *entry;
+            entry->file = file_entry->file;
+            entry->page_read_bytes = page_read_bytes;
+            entry->page_zero_bytes = page_zero_bytes; 
+            //hash_insert (thread_current ()->spage_table, )
 
         }
 
