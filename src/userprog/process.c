@@ -443,41 +443,6 @@ push_pointer_to_stack (void **esp, void *ptr)
 	*((int **) *esp) = (int *) ptr;
 }
 
-/* Function to calculate total of data pushed to stack */
-static int
-calc_total_stack_size(int argc, char** argv)
-{
-	size_t total_size = 0;
-
-	/* Size for each string argument */
-	for (int i = 0; i < argc; i++)
-	{
-			if (argv[i] != NULL)
-			{
-					total_size += strlen(argv[i]) + 1; /* +1 for null terminator */
-			}
-	}
-
-	/* Size of word alignment bytes */
-
-	/* Size for each argv element */
-	total_size += (argc + 1) * sizeof(char *);
-
-	/* Size of null pointer sentinel */
-	total_size += sizeof(char *);
-
-	/* Argv */
-	total_size += sizeof(char **);
-
-	/* Argc */
-	total_size += sizeof(int);
-
-	/* Fake return address */
-	total_size += sizeof(void *);
-
-	return total_size;
-}
-
 /* A thread function that loads a user process and starts it
    running. */
 static void
@@ -519,17 +484,7 @@ start_process (void *file_name_)
 	/* Increment child_load_sema on success, to allow parent process
 		 to return from exec. */
 	sema_up (&cur->rs_manager->child_load_sema);
-
-	/* Calculate total size of data pushed onto the stack. */
-	int total_size = calc_total_stack_size (argc, argv);
 	
-	/* Exit thread if user's stack page is being overflowed. */
-	if (total_size > PGSIZE)
-	{
-		printf("Error: Stack size exceeds PGSIZE. \n");
-		thread_exit();
-	}
-
 	/* Push words to stack. */
 	for (int i = argc - 1; i >= 0; i--)
 	{
