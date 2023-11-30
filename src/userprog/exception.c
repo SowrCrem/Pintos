@@ -173,8 +173,27 @@ page_fault (struct intr_frame *f)
 			return;
 		}
 	} 
-	
 
+	/* Dynamic Stack Allocation */
+
+	/* A fault at or above esp while still being underneath PHYS_BASE is fine */
+
+	if (fault_addr >= f->esp && fault_addr < PHYS_BASE || fault_addr == f->esp - 32 || fault_addr == f->esp - 4) 
+	{
+		/* Check that stack will not exceed 8MB */
+		if (PHYS_BASE - pg_round_down(fault_addr) <= 8 * 1024 * 1024) 
+		{
+			// TODO : Grow the stack by allocating a page
+		} 
+		else 
+		{
+			//Stack too large
+		}
+	} 
+	else 
+	{
+		// kill process
+	}
 
 	#endif
 	
