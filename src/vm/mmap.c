@@ -5,12 +5,15 @@
 mapid_t 
 mmap_create (struct file_entry *file_entry, void *addr)
 {
+
+    struct thread *t = thread_current ();
+
     /* Find number of bytes in file. */
 
     /* TODO: Add filesys lock when accessing the file. */
-    int no_bytes_to_read = file_length (file_entry->file);
+    int read_bytes = file_length (file_entry->file);
     /* Return error if file's length is 0 bytes. */
-    if (no_bytes_to_read == 0)
+    if (read_bytes == 0)
     {
         return ERROR;
     }
@@ -21,41 +24,60 @@ mmap_create (struct file_entry *file_entry, void *addr)
 
     /* Check address is page aligned - if not return error. */
 
-    while (no_bytes_to_read > 0)
+    while (read_bytes > 0)
     {
         /* Initialise temporary variable (no of bytes to be read from exec file).*/
-        int page_read_bytes = (no_bytes_to_read >= PGSIZE) ? PGSIZE : no_bytes_to_read;
-        int page_zero_bytes = 0;
+        /* Read PAGE_READ_BYTES from FILE and
+            zero the final PAGE_ZERO_BYTES bytes. */
+
+        int page_read_bytes = (read_bytes >= PGSIZE) ? PGSIZE : read_bytes;
+        int page_zero_bytes = PGSIZE - page_read_bytes;
 
         /* Map page_read_bytes to page. */
 
-        /* TODO: Define overlap boolean. */
-        bool overlap;
+        /* Check if virtual page already allocated for the file */
+        struct spt_entry s_find;
+        s_find.file = file_entry->file;
+        struct hash_elem *found = hash_find (t->spage_table, &s_find.elem);
 
-        /* Range of pages mapped overlap any existing set of mapped pages. */
-        if (overlap) {
-            return ERROR;
+        if (found == NULL)
+        {
+            struct spt_entry *spte = malloc (sizeof (struct spt_entry));
 
-        } else {
-            /* Add page to spt for thread_current. */
-            struct spt_entry *entry;
-            entry->file = file_entry->file;
-            entry->page_read_bytes = page_read_bytes;
-            entry->page_zero_bytes = page_zero_bytes; 
-            //hash_insert (thread_current ()->spage_table, )
+            /* TODO: Recheck assignment of spte is correct or not? */
+            spte->file = file;
+            spte->upage = addr;
+            spte->ofs = 0;
+            spte->page_read_bytes = page_read_bytes;
+            spte->page_zero_bytes = page_zero_bytes;
+            spte->writable = writable;
+            spte->loaded = false;
+
+            struct hash_elem *h = hash_insert (t->spage_table, &spte->elem);
+        } 
+        else
+        {
+            struct spt_entry *spte = hash_entry (found, struct spt_entry, elem);
+
+            if (writable && !spte->writable)
+            {
+                spte->writable = writable;
+            }
+            spte->page_read_bytes = page_read_bytes;
+            spte->page_zero_bytes = page_zero_bytes;
+
+            struct hash_elem *h = hash_replace (t->spage_table, &spte->elem);
 
         }
-
-        
-        
-
+        /* Need to allocate frames somewhere? */
 
         /* Update temporary variables */
-        no_bytes_to_read -= PGSIZE;
+        read_bytes -= PGSIZE;
         start_addr += PGSIZE;
 
     }
-    return -1;
+    return -1
+    +;
 }
 
 void 
