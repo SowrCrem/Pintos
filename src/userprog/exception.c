@@ -158,6 +158,7 @@ page_fault (struct intr_frame *f)
 	struct spt_entry spte;
 	spte.upage = upage;
 
+	/* Look up address in supplemental page table. */
 	struct hash_elem *h = hash_find (spt, &spte.elem);
 
 	if (h != NULL) {

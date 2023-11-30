@@ -1,9 +1,9 @@
 #ifndef THREADS_THREAD_H
 #define THREADS_THREAD_H
 
-#include <debug.h>
-#include <list.h>
-#include <stdint.h>
+#include "../lib/stdint.h"
+#include "../lib/debug.h"
+#include "../lib/kernel/list.h"
 #include "../userprog/process.h"
 
 // #define USERPROG 1      /* TODO: For testing purposes - ask UTA */

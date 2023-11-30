@@ -8,7 +8,7 @@
 #include "../lib/kernel/hash.h"
 
 /* Frame table entry structure. */
-struct frame_table_entry
+struct ftable_entry
 {
   struct thread *owner;     /* Owning thread. */
   void *kpage;               /* Corresponding kernel virtual address pointer. */

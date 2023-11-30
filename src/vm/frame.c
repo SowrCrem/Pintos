@@ -16,8 +16,8 @@ static struct lock frame_table_lock;
 static unsigned 
 frame_hash (const struct hash_elem *elem, void *aux UNUSED) 
 {
-  const struct frame_table_entry *entry = 
-      hash_entry (elem, struct frame_table_entry, elem);
+  const struct ftable_entry *entry = 
+      hash_entry (elem, struct ftable_entry, elem);
   return hash_bytes (&entry->kpage, sizeof (entry->kpage));
 }
 
@@ -33,7 +33,7 @@ frame_less (const struct hash_elem *a, const struct hash_elem *b,
 void
 frame_destroy_func (struct hash_elem *elem, void *aux UNUSED)
 {
-  struct frame_table_entry *entry = hash_entry (elem, struct frame_table_entry, elem);
+  struct ftable_entry *entry = hash_entry (elem, struct ftable_entry, elem);
   free (entry);
 }
 
@@ -55,7 +55,7 @@ frame_allocate (void)
   
   if (kpage != NULL)
   {
-    struct frame_table_entry *entry = malloc (sizeof (struct frame_table_entry));
+    struct ftable_entry *entry = malloc (sizeof (struct ftable_entry));
     entry->owner = thread_current ();
     entry->kpage = kpage;
 
@@ -81,7 +81,7 @@ frame_allocate (void)
 void 
 frame_free (void *kpage) 
 {
-  struct frame_table_entry *entry = malloc (sizeof (struct frame_table_entry));
+  struct ftable_entry *entry = malloc (sizeof (struct ftable_entry));
   entry->kpage = kpage;
 
   lock_acquire (&frame_table_lock);
@@ -89,15 +89,16 @@ frame_free (void *kpage)
     struct hash_elem *e = hash_find (&frame_table, &entry->elem);
     if (e != NULL)
     {
-      struct frame_table_entry *entry = hash_entry (e, struct frame_table_entry, elem);
+      struct ftable_entry *entry = hash_entry (e, struct ftable_entry, elem);
       hash_delete (&frame_table, &entry->elem);
       
       /* Free page (implicitly synchronized). */
       palloc_free_page (kpage);
       // palloc_free_page (entry->page);
 
-      free (entry);
     }
+
+    free (entry);
 
   lock_release(&frame_table_lock);
 }
@@ -112,11 +113,11 @@ frame_remove_all (struct thread *thread)
   hash_first (&i, &frame_table);
   while (hash_next (&i))
   {
-    struct frame_table_entry *entry = hash_entry (hash_cur (&i), struct frame_table_entry, elem);
-    if (entry->owner == thread)
+    struct ftable_entry *e = hash_entry (hash_cur (&i), struct ftable_entry, elem);
+    if (e->owner == thread)
     {
-      hash_delete (&frame_table, &entry->elem);
-      free (entry);
+      hash_delete (&frame_table, &e->elem);
+      free (e);
     }
   }
 }

@@ -821,7 +821,7 @@ validate_segment (const struct Elf32_Phdr *phdr, struct file *file)
 	return true;
 }
 
-/* Lazy loads the file into the supplemental page table, to be loadede
+/* Stores the file as entries in the supplemental page table, to be loaded
 	 into memory on demand. */
 static bool
 lazy_load_segment (struct file *file, off_t ofs, uint8_t *upage,
@@ -958,8 +958,8 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		} else {
 
 			/* Check if writable flag for the page should be updated */
-			if(writable && !pagedir_is_writable(t->pagedir, upage)){
-				pagedir_set_writable(t->pagedir, upage, writable);
+			if (writable && !pagedir_is_writable (t->pagedir, upage)) {
+				pagedir_set_writable (t->pagedir, upage, writable);
 			}
 
 		}
