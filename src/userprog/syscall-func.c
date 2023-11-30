@@ -4,6 +4,7 @@
 #include "../threads/malloc.h"
 #include "../lib/stdio.h"
 #include "../lib/string.h"
+#include "../vm/mmap.h"
 
 static void halt (void);
 static void exit (int status);
@@ -369,6 +370,35 @@ close (int fd)
 	free (file_entry);
 }
 
+/* Maps a file to virtual memory address. */
+static mapid_t
+mmap (int fd, void *addr) 
+{
+
+	/* Obtain the file entry for the corresponding file descriptor.  */
+	struct file_entry *file_entry = file_entry_lookup (fd);
+
+	/* TODO: Recheck method of validity for file lookup. */
+	if (file_entry->file_name == NULL)
+	{
+		return ERROR;
+	}
+
+	/* Return mapid_t value for given file if mapped to virtual address. */
+	mapid_t mapid = mmap_create (file_entry, addr);
+
+	return mapid;
+}
+
+/* Removes a file from the virtual memory address. */
+static void
+munmap (mapid_t mapid) 
+{
+	
+	/* Execute mmap_destroy function on mapping id. */
+	mmap_destroy (mapid);
+
+}
 
 
 /* Syscall Helper Functions */
@@ -503,11 +533,40 @@ syscall_tell (struct intr_frame *if_)
 }
 
 void
-syscall_close (struct intr_frame *if_ UNUSED)
+syscall_close (struct intr_frame *if_)
 {
 	/* Retrieve fd from if_ or an argv array. */
 	int fd = (int) syscall_get_arg (if_, 1);
 	
 	/* Execute close syscall . */
 	close (fd);
+}
+
+
+void 
+syscall_mmap (struct intr_frame *if_)
+{
+
+	/* Retrieve fd and addr from if_ or an argv array */
+	int fd = (int) syscall_get_arg (if_, 1);
+	void *addr = (void *) syscall_get_arg (if_, 2);
+
+	
+	/* Get result and store it in if_->eax */
+	mapid_t mapid = mmap (fd, addr);
+	if_->eax = mapid;
+
+}
+
+void 
+syscall_munmap (struct intr_frame *if_)
+{
+
+	/* Retrieve fd and addr from if_ or an argv array */
+	mapid_t mapid = (mapid_t) syscall_get_arg (if_, 1);
+
+	
+	/* Execute munmap syscall */
+	munmap (mapid);
+
 }
