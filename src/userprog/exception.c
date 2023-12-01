@@ -184,6 +184,14 @@ page_fault (struct intr_frame *f)
 		if (PHYS_BASE - pg_round_down(fault_addr) <= 8 * 1024 * 1024) 
 		{
 			// TODO : Grow the stack by allocating a page
+			void *added_stack_page = pg_round_down(fault_addr);
+
+			/* Add this stack page to spt */
+			//TODO : have a new spt entry for this stack page
+
+			/* Allocate a new stack page */
+			// use get_user_page
+			// hash_insert into spt 
 		} 
 		else 
 		{
