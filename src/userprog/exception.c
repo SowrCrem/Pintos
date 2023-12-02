@@ -1,5 +1,6 @@
 #include "../lib/inttypes.h"
 #include "../lib/stdio.h"
+#include "../lib/stdlib.h"
 #include "userprog/exception.h"
 #include "userprog/gdt.h"
 #include "userprog/syscall.h"
@@ -7,6 +8,7 @@
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+#include "threads/palloc.h"
 
 /* Number of page faults processed. */
 static long long page_fault_cnt;
@@ -178,29 +180,55 @@ page_fault (struct intr_frame *f)
 
 	/* A fault at or above esp while still being underneath PHYS_BASE is fine */
 
-	if (fault_addr >= f->esp && fault_addr < PHYS_BASE || fault_addr == f->esp - 32 || fault_addr == f->esp - 4) 
+	if ((fault_addr >= f->esp) && (fault_addr < PHYS_BASE) || fault_addr == f->esp - PUSHA_BYTES_BELOW || fault_addr == f->esp - PUSH_BYES_BELOW) 
 	{
 		/* Check that stack will not exceed 8MB */
-		if (PHYS_BASE - pg_round_down(fault_addr) <= 8 * 1024 * 1024) 
+		if (PHYS_BASE - pg_round_down(fault_addr) <= MAX_STACK_SIZE) 
 		{
 			// TODO : Grow the stack by allocating a page
 			void *added_stack_page = pg_round_down(fault_addr);
 
 			/* Add this stack page to spt */
 			//TODO : have a new spt entry for this stack page
+			struct spt_entry *spte = malloc(sizeof(struct spt_entry));
+			spte->upage = added_stack_page;
+			spte->file = NULL;
+			spte->ofs = 0;
+			spte->page_read_bytes = 0;
+			spte->page_zero_bytes = 0;
+			spte->writable = true;
+			spte->loaded = false;
 
 			/* Allocate a new stack page */
+			void *kpage = palloc_get_page(PAL_USER | PAL_ZERO);
 			// use get_user_page
 			// hash_insert into spt 
+			struct hash_elem *h = hash_insert (thread_current()->spage_table, &spte->elem);
+			if (kpage != NULL)
+			{
+				/* Install the new stack page */
+				bool success = install_page (spte, kpage, NULL);		
+				//also need to add to frame table here
+				if (!success) {
+					PANIC("install_page unsuccessful");
+				}
+				
+			} else 
+			{
+				palloc_free_page(kpage);
+				PANIC("Unable to allocate new stack page");
+			}
 		} 
 		else 
 		{
 			//Stack too large
+
 		}
 	} 
 	else 
 	{
-		// kill process
+		// Invalid fault address or stack too large
+		terminate_userprog(ERROR);
 	}
 
 	#endif
