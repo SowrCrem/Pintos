@@ -19,6 +19,8 @@ static int write (int fd, const void *buffer, unsigned size);
 static void seek (int fd, unsigned position);
 static unsigned tell (int fd);
 static void close (int fd);
+static mapid_t mmap (int fd, void *addr);
+static void munmap (mapid_t mapid);
 
 /* Terminates by calling shutdown_power_off(). Seldom used because
 	 you lose information about possible deadlock situations. */
@@ -374,15 +376,12 @@ close (int fd)
 static mapid_t
 mmap (int fd, void *addr) 
 {
+	// printf ("Reached mmap function\n");
 
 	/* Obtain the file entry for the corresponding file descriptor.  */
 	struct file_entry *file_entry = file_entry_lookup (fd);
 
 	/* TODO: Recheck method of validity for file lookup. */
-	if (file_entry->file_name == NULL)
-	{
-		return ERROR;
-	}
 
 	/* Return mapid_t value for given file if mapped to virtual address. */
 	mapid_t mapid = mmap_create (file_entry, addr);

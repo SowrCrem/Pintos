@@ -4,6 +4,9 @@
         "stdint.h": "c",
         "process.h": "c",
         "__threading_support": "c",
-        "hash.h": "c"
+        "hash.h": "c",
+        "palloc.h": "c",
+        "pte.h": "c",
+        "vaddr.h": "c"
     }
 }

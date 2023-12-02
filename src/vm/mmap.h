@@ -7,7 +7,7 @@ typedef int mapid_t;
 #define PGSIZE (4096)
 
 
-mapid_t mmap_create (struct file_entry *file_entry, void *addr);
+mapid_t mmap_create (struct file_entry *file_entry, void *start);
 void mmap_destroy (mapid_t mapid);
 
 #endif /* VM_MAP_H */

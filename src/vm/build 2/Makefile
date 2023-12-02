@@ -64,10 +64,9 @@ userprog_SRC += userprog/syscall-func.c	 # System call functionality.
 userprog_SRC += userprog/memory-access.c # Memory access.
 
 # Virtual memory code.
-vm_SRC  = devices/swap.c		         # Swap block manager.
-vm_SRC += vm/frame.c			         # Frame table.
-vm_SRC += vm/mmap.c                      # Memory Mapping File.     
-# vm_SRC = vm/file.c			         # Some other file.
+vm_SRC += devices/swap.c		# Swap block manager.
+vm_SRC += vm/frame.c				# Frame table.
+#vm_SRC = vm/file.c			    # Some other file.
 
 # Filesystem code.
 filesys_SRC  = filesys/filesys.c	# Filesystem core.

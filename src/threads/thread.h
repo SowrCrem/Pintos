@@ -6,8 +6,8 @@
 #include "../lib/kernel/list.h"
 #include "../userprog/process.h"
 
-// #define USERPROG 1      /* TODO: For testing purposes - ask UTA */
-// #define VM 1
+#define USERPROG 1      /* TODO: For testing purposes - ask UTA */
+#define VM 1
 
 /* States in a thread's life cycle. */
 enum thread_status
