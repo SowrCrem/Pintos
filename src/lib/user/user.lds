@@ -4,10 +4,10 @@ ENTRY(_start)
 
 SECTIONS
 {
-  /* Read-only sections, merged into text segment: */
-  __executable_start = 0x08048000 + SIZEOF_HEADERS;
-  . = 0x08048000 + SIZEOF_HEADERS;
-  .text : { *(.text) } = 0x90
+  /* Read-only sections, merged into text segment, at fixed start offset. */
+  __executable_start = 0x08048000;
+  . = 0x08048000;
+  .text : { *(.text) }
   .rodata : { *(.rodata) }
 
   /* Adjust the address for the data segment.  We want to adjust up to

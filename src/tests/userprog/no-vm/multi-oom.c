@@ -69,7 +69,7 @@ consume_some_resources_and_die (int seed)
   random_init ( (unsigned) seed );
   int *PHYS_BASE = (int *)0xC0000000;
 
-  switch (random_ulong () % 5)
+  switch (random_ulong () % 6)
     {
       case 0:
         *(int *) NULL = 42;
@@ -88,6 +88,9 @@ consume_some_resources_and_die (int seed)
       case 4:
         open ((char *)PHYS_BASE);
         exit (-1);
+        
+      case 5:
+        return 1/0;
 
       default:
         NOT_REACHED ();

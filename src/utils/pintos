@@ -12,22 +12,22 @@ BEGIN { my $self = $0; $self =~ s%/+[^/]*$%%; require "$self/Pintos.pm"; }
 
 # Command-line options.
 our ($start_time) = time ();
-our ($sim);				# Simulator: bochs, qemu, or player.
-our ($debug) = "none";	# Debugger: none, monitor, or gdb.
+our ($sim);			# Simulator: bochs, qemu, or player.
+our ($debug) = "none";		# Debugger: none, monitor, or gdb.
 our ($mem) = 4;			# Physical RAM in MB.
 our ($serial) = 1;		# Use serial port for input and output?
-our ($vga);				# VGA output: window, terminal, or none.
+our ($vga);			# VGA output: window, terminal, or none.
 our ($jitter);			# Seed for random timer interrupts, if set.
 our ($realtime);		# Synchronize timer interrupts with real time?
 our ($timeout);			# Maximum runtime in seconds, if set.
-our ($kill_on_failure);	# Abort quickly on test failure?
+our ($kill_on_failure);		# Abort quickly on test failure?
 our (@puts);			# Files to copy into the VM.
 our (@gets);			# Files to copy out of the VM.
 our ($as_ref);			# Reference to last addition to @gets or @puts.
 our (@kernel_args);		# Arguments to pass to kernel.
 our (%parts);			# Partitions.
 our ($make_disk);		# Name of disk to create.
-our ($tmp_disk) = 1;	# Delete $make_disk after run?
+our ($tmp_disk) = 1;		# Delete $make_disk after run?
 our (@disks);			# Extra disk images to pass to simulator.
 our ($loader_fn);		# Bootstrap loader.
 our (%geometry);		# IDE disk geometry.
