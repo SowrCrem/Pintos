@@ -185,14 +185,17 @@ page_fault (struct intr_frame *f)
 	    || fault_addr == f->esp - PUSHA_BYTES_BELOW 
 		|| fault_addr == f->esp - PUSH_BYES_BELOW) 
 	{
+		//printf("inside valid stack growth condition\n");
 		/* Check that stack will not exceed 8MB */
-		if (PHYS_BASE - pg_round_down(fault_addr) <= MAX_STACK_SIZE) 
+		if ((PHYS_BASE - pg_round_down(fault_addr) <= MAX_STACK_SIZE) 
+		     && (is_user_vaddr(fault_addr))) 
 		{
-			// TODO : Grow the stack by allocating a page
+			//printf("Passed max stack size check and is_user_vaddr check\n");
+			//Grow the stack by allocating a page
 			void *added_stack_page = pg_round_down(fault_addr);
 
 			/* Add this stack page to spt */
-			//TODO : have a new spt entry for this stack page
+			//have a new spt entry for this stack page
 			struct spt_entry *spte = malloc(sizeof(struct spt_entry));
 			spte->upage = added_stack_page;
 			spte->file = NULL;
@@ -210,7 +213,7 @@ page_fault (struct intr_frame *f)
 			if (kpage != NULL)
 			{
 				/* Install the new stack page */
-				bool success = install_page (spte, kpage, NULL);		
+				bool success = install_page (added_stack_page, kpage, NULL);		
 				if (!success) {
 					PANIC("install_page unsuccessful");
 				} 
@@ -224,6 +227,7 @@ page_fault (struct intr_frame *f)
 		else 
 		{
 			//Stack too large
+			terminate_userprog(ERROR);
 
 		}
 	} 
