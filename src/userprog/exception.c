@@ -9,6 +9,7 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 #include "threads/palloc.h"
+#include "vm/frame.h"
 
 /* Number of page faults processed. */
 static long long page_fault_cnt;
@@ -180,7 +181,9 @@ page_fault (struct intr_frame *f)
 
 	/* A fault at or above esp while still being underneath PHYS_BASE is fine */
 
-	if ((fault_addr >= f->esp) && (fault_addr < PHYS_BASE) || fault_addr == f->esp - PUSHA_BYTES_BELOW || fault_addr == f->esp - PUSH_BYES_BELOW) 
+	if ((fault_addr >= f->esp) && (fault_addr < PHYS_BASE) 
+	    || fault_addr == f->esp - PUSHA_BYTES_BELOW 
+		|| fault_addr == f->esp - PUSH_BYES_BELOW) 
 	{
 		/* Check that stack will not exceed 8MB */
 		if (PHYS_BASE - pg_round_down(fault_addr) <= MAX_STACK_SIZE) 
@@ -200,7 +203,7 @@ page_fault (struct intr_frame *f)
 			spte->loaded = false;
 
 			/* Allocate a new stack page */
-			void *kpage = palloc_get_page(PAL_USER | PAL_ZERO);
+			void *kpage = frame_allocate();
 			// use get_user_page
 			// hash_insert into spt 
 			struct hash_elem *h = hash_insert (thread_current()->spage_table, &spte->elem);
@@ -208,10 +211,9 @@ page_fault (struct intr_frame *f)
 			{
 				/* Install the new stack page */
 				bool success = install_page (spte, kpage, NULL);		
-				//also need to add to frame table here
 				if (!success) {
 					PANIC("install_page unsuccessful");
-				}
+				} 
 				
 			} else 
 			{
