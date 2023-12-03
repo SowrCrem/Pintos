@@ -936,6 +936,23 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 static bool
 setup_stack (void **esp)
 {
+	/* Allocate and install initial stack page at load time */
+	uint8_t *initial_stack_upage = ((uint8_t *) PHYS_BASE) - PGSIZE;
+	struct spt_entry *spte = malloc (sizeof (struct spt_entry));
+	
+	spte->upage = initial_stack_upage;
+	spte->file = NULL;
+	spte->ofs = 0;
+	spte->page_read_bytes = 0;
+	spte->page_zero_bytes = 0;
+	spte->writable = true;
+	spte->loaded = false;
+
+	if (initial_stack_upage == NULL)
+	{
+		return false;
+	}
+
 	uint8_t *kpage;
 	bool success = false;
 
@@ -945,8 +962,8 @@ setup_stack (void **esp)
 		success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
 		if (success)
 		{
-			/* Temporarily set up stack to avoid immediate page fault */
-			*esp = PHYS_BASE - 12;
+			*esp = PHYS_BASE;
+			hash_insert (thread_current()->spage_table, &spte->elem);
 		}
 		else
 			palloc_free_page (kpage);
