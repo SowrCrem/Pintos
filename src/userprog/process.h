@@ -31,6 +31,7 @@ struct spt_entry
 	
 	bool loaded;                /* True if page is loaded. */
 	// bool swapped;               /* True if page is swapped. */
+  bool stack_access;           /* True if page fault is a stack access */
 	
 	struct hash_elem elem; 			/* Hash table element. */
 };

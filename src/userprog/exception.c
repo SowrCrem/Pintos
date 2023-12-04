@@ -168,6 +168,7 @@ page_fault (struct intr_frame *f)
 		struct spt_entry *spte = hash_entry (h, struct spt_entry, elem);
 
 		/* Load page. */
+
 		if (load_segment (spte->file, spte->ofs, spte->upage, 
 											 spte->page_read_bytes, spte->page_zero_bytes, 
 											 spte->writable))
@@ -204,6 +205,7 @@ page_fault (struct intr_frame *f)
 			spte->page_zero_bytes = 0;
 			spte->writable = true;
 			spte->loaded = false;
+			spte->stack_access = true;
 
 			/* Allocate a new stack page */
 			void *kpage = frame_allocate();
@@ -217,6 +219,11 @@ page_fault (struct intr_frame *f)
 				if (!success) {
 					PANIC("install_page unsuccessful");
 				} 
+				else 
+				{
+					printf("Installed page successfully\n");
+					return;
+				}
 				
 			} else 
 			{
@@ -239,7 +246,6 @@ page_fault (struct intr_frame *f)
 
 	#endif
 	
-
 	/* Copy eax value to eip. */
 	f->eip = (void *) f->eax;
 	/* Set eax value to -1. */
