@@ -269,45 +269,45 @@ page_fault (struct intr_frame *f)
 				}
 			}
 		}
-	}
+	// }
 	
 
-		/* Load page. */
-		if (!spte->loaded)
-		{
-			/* If stack page. */
-			if (spte->stack_access)
-			{
-				void *kpage = frame_allocate();
-				install_page (spte->upage, kpage, spte->writable);
-				spte->loaded = true;
-			} else
-			{
-				/* Lazy load page from file system. */
-				// printf ("(page-fault) lazy loading %d into memory\n", spte->upage);
-				if (load_segment (spte->file, spte->ofs, spte->upage, 
-												 spte->page_read_bytes, spte->page_zero_bytes, 
-												 spte->writable))
-				{
-					// printf ("(page-fault) successfully loaded %d into memory\n", spte->upage);
-					return;
-				}
-			}
-		}
-		else
-		{
-			printf ("(page-fault) %d already loaded\n", spte->upage);
-			return;
-		}
-	} 
+	// 	/* Load page. */
+	// 	if (!spte->loaded)
+	// 	{
+	// 		/* If stack page. */
+	// 		if (spte->stack_access)
+	// 		{
+	// 			void *kpage = frame_allocate();
+	// 			install_page (spte->upage, kpage, spte->writable);
+	// 			spte->loaded = true;
+	// 		} else
+	// 		{
+	// 			/* Lazy load page from file system. */
+	// 			// printf ("(page-fault) lazy loading %d into memory\n", spte->upage);
+	// 			if (load_segment (spte->file, spte->ofs, spte->upage, 
+	// 											 spte->page_read_bytes, spte->page_zero_bytes, 
+	// 											 spte->writable))
+	// 			{
+	// 				// printf ("(page-fault) successfully loaded %d into memory\n", spte->upage);
+	// 				return;
+	// 			}
+	// 		}
+	// 	}
+	// 	else
+	// 	{
+	// 		printf ("(page-fault) %d already loaded\n", spte->upage);
+	// 		return;
+	// 	}
+	// } 
 
 	/* Dynamic Stack Allocation */
 
 	/* A fault at or above esp while still being underneath PHYS_BASE is fine */
 
 	if ((fault_addr >= f->esp) && (fault_addr < PHYS_BASE) 
-	    || fault_addr == f->esp - PUSHA_BYTES_BELOW 
-		|| fault_addr == f->esp - PUSH_BYES_BELOW) 
+	     || fault_addr == f->esp - PUSHA_BYTES_BELOW 
+			 || fault_addr == f->esp - PUSH_BYES_BELOW) 
 	{
 		//printf("inside valid stack growth condition\n");
 		/* Check that stack will not exceed 8MB */
@@ -325,7 +325,6 @@ page_fault (struct intr_frame *f)
 			spte->file = NULL;
 			spte->ofs = 0;
 			spte->page_read_bytes = 0;
-			spte->page_zero_bytes = 0;
 			spte->writable = true;
 			spte->loaded = false;
 			spte->stack_access = true;
@@ -340,17 +339,17 @@ page_fault (struct intr_frame *f)
 				/* Install the new stack page */
 				bool success = install_page (added_stack_page, kpage, spte->writable);		
 				if (!success) {
-					PANIC("install_page unsuccessful");
+					PANIC ("install_page unsuccessful");
 				} 
 				else 
 				{
-					// printf("Installed page successfully\n");
+					// printf ("Installed page successfully\n");
 					return;
 				}
 				
 			} else 
 			{
-				// palloc_free_page(kpage);
+				// palloc_free_page (kpage);
 				PANIC("Unable to allocate new stack page");
 			}
 		} 
@@ -365,6 +364,7 @@ page_fault (struct intr_frame *f)
 	{
 		// Invalid fault address or stack too large
 		terminate_userprog(ERROR);
+	}
 	}
 
 	#endif

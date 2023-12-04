@@ -36,10 +36,7 @@ struct spt_entry
 
   bool mmaped;                /* Boolean for mmap'd pages. */
 	size_t page_zero_bytes;     /* Number of bytes to zero. */
-	bool writable;              /* True if page is writable. */
 	
-	bool loaded;                /* True if page is loaded. */
-	bool swapped;               /* True if page is swapped. */
   bool stack_access;          /* True if page fault is a stack access */
 	
 	struct hash_elem elem; 			/* Hash table element. */
