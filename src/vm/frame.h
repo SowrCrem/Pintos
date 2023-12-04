@@ -3,22 +3,26 @@
 
 #include "../lib/stdbool.h"
 #include "../lib/stdint.h"
+#include "../lib/kernel/hash.h"
 #include "../threads/thread.h"
 #include "../threads/palloc.h"
-#include "../lib/kernel/hash.h"
+#include "../userprog/process.h"
 
 /* Frame table entry structure. */
 struct ftable_entry
 {
   struct thread *owner;     /* Owning thread. */
-  void *kpage;               /* Corresponding kernel virtual address pointer. */
+  void *kpage;              /* Corresponding kernel virtual address pointer. */
+
+  struct spt_entry *spte;   /* Page stored in the frame. */
+  bool pinned;              /* Boolean for if frame is pinned. */
 
   struct hash_elem elem;    /* Hash element for frame table. */
 };
 
 /* Frame table functions. */
-void frame_table_init (void);
-void *frame_allocate (void);
+void frame_init (void);
+struct ftable_entry *frame_allocate (void);
 void frame_free (void *);
 void frame_remove_all (struct thread *);
 

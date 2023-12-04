@@ -317,6 +317,11 @@ thread_exit (void)
   process_exit ();
 #endif
 
+#ifdef VM
+  /* Remove all frames owned by thread. NEED TO FIX FUNCTION. */
+  // frame_remove_all (thread_current ());
+#endif
+
   /* Remove thread from all threads list, set our status to dying,
      and schedule another process.  That process will destroy us
      when it calls thread_schedule_tail(). */

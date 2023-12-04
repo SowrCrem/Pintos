@@ -112,7 +112,7 @@ file_table_destroy_func (struct hash_elem *e_, void *aux UNUSED)
   free (e);
 }
 
-/* Returns file_entry pointer for corresponding fd.
+/* Returns file_entry pointer for corresponding FD.
    Returns NULL if not found */
 struct file_entry *
 file_entry_lookup (int fd)
@@ -213,6 +213,8 @@ rs_manager_init (struct rs_manager *parent, struct thread *child)
 static void
 rs_manager_free (struct rs_manager *rs)
 {
+	ASSERT (rs != NULL);
+
 	/* Empty children list and free their respective rs_manager if child
 		 processes are not running. */
 	while (!list_empty (&rs->children))
@@ -261,7 +263,7 @@ rs_manager_free (struct rs_manager *rs)
 		sema_up (&rs->child_exit_sema);
 		lock_release (&rs->exit_lock);
 	}
-	}
+}
 
 
 /* Starts a new thread running a user program loaded from
@@ -336,11 +338,11 @@ process_wait (tid_t child_tid)
 }
 
 
-/* SUPPLEMENTAL PAGE TABLE STRUCT AND FUNCTIONS*/
+/* SUPPLEMENTAL PAGE TABLE STRUCT AND FUNCTIONS */
 
 /* Supplemental page table hash function. */
 static unsigned 
-spage_hash (const struct hash_elem *e, void *aux UNUSED)
+spt_entry_hash (const struct hash_elem *e, void *aux UNUSED)
 {
 	const struct spt_entry *spte = hash_entry (e, struct spt_entry, elem);
 	return hash_bytes (&spte->upage, sizeof spte->upage);
@@ -348,7 +350,7 @@ spage_hash (const struct hash_elem *e, void *aux UNUSED)
 
 /* Supplemental page table comparison function. */
 static bool 
-spage_less (const struct hash_elem *a, const struct hash_elem *b, 
+spt_entry_less (const struct hash_elem *a, const struct hash_elem *b, 
 						void *aux UNUSED)
 {
 	const struct spt_entry *spte_a = hash_entry (a, struct spt_entry, elem);
@@ -358,11 +360,24 @@ spage_less (const struct hash_elem *a, const struct hash_elem *b,
 
 /* Frees every spt_entry. */
 static void
-spage_destroy_func (struct hash_elem *e_, void *aux UNUSED)
+spt_entry_destroy_func (struct hash_elem *e_, void *aux UNUSED)
 {
 	struct spt_entry *e = hash_entry (e_, struct spt_entry, elem);
 	free (e);
 }
+
+/* Look up function for supplemental page table. */
+struct spt_entry *
+spt_entry_lookup (const void *upage)
+{
+	struct spt_entry spte;
+	spte.upage = upage;
+
+	struct hash_elem *e;
+	e = hash_find (&thread_current ()->spage_table, &spte.elem);
+	return e != NULL ? hash_entry (e, struct spt_entry, elem) : NULL;
+}
+
 
 /* Free the current process's resources. */
 void
@@ -377,11 +392,8 @@ process_exit (void)
 	
 	#ifdef VM
 		/* Destroy the current process's supplemental page table. */
-		hash_destroy (cur->spage_table, &spage_destroy_func);
+		hash_destroy (cur->spage_table, &spt_entry_destroy_func);
 		free (cur->spage_table);
-
-		/* Remove all frames owned by thread. */
-		// frame_remove_all (cur);
 	#endif
 
 	/* Destroy the current process's page directory and switch back
@@ -667,7 +679,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
 	#ifdef VM
 		/* Initialise supplemental page table for current thread. */
 		t->spage_table = malloc (sizeof (struct hash));
-		hash_init (t->spage_table, &spage_hash, &spage_less, NULL);
+		hash_init (t->spage_table, &spt_entry_hash, &spt_entry_less, NULL);
 	#endif
 
 	/* Open executable file. */
@@ -679,6 +691,8 @@ load (const char *file_name, void (**eip) (void), void **esp)
 		goto done;
 	}
 
+	/* Deny writes to open file. */
+	// file_deny_write (file);
 
 	/* Read and verify executable header. */
 	if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
@@ -774,8 +788,6 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
 /* load() helpers. */
 
-static bool install_page (void *upage, void *kpage, bool writable);
-
 /* Checks whether PHDR describes a valid, loadable segment in
    FILE and returns true if so, false otherwise. */
 static bool
@@ -821,8 +833,9 @@ validate_segment (const struct Elf32_Phdr *phdr, struct file *file)
 	return true;
 }
 
-/* Stores the file as entries in the supplemental page table, to be loaded
-	 into memory on demand. */
+/* Stores entries for a segment starting at offset OFS in FILE at 
+	 address UPAGE, into the supplemental page table to be loaded 
+	 on demand. */
 static bool
 lazy_load_segment (struct file *file, off_t ofs, uint8_t *upage,
               uint32_t read_bytes, uint32_t zero_bytes, bool writable)
@@ -832,8 +845,6 @@ lazy_load_segment (struct file *file, off_t ofs, uint8_t *upage,
 	ASSERT (ofs % PGSIZE == 0);
 
 	/* Lazy load the pages. */
-
-	file_seek (file, ofs);
 	while (read_bytes > 0 || zero_bytes > 0)
 	{
 		/* Calculate how to fill this page.
@@ -860,9 +871,12 @@ lazy_load_segment (struct file *file, off_t ofs, uint8_t *upage,
 			spte->file = file;
 			spte->ofs = ofs;
 			spte->page_read_bytes = page_read_bytes;
-			spte->page_zero_bytes = page_zero_bytes;
 			spte->writable = writable;
 			spte->loaded = false;
+			spte->disk = true;
+			spte->swap_index = NULL;
+			spte->swapped = false;
+			spte->mmaped = false;
 
 			struct hash_elem *h = hash_insert (t->spage_table, &spte->elem);
 
@@ -881,7 +895,6 @@ lazy_load_segment (struct file *file, off_t ofs, uint8_t *upage,
 				spte->writable = writable;
 			}
 			spte->page_read_bytes = page_read_bytes;
-			spte->page_zero_bytes = page_zero_bytes;
 
 			struct hash_elem *h = hash_replace (t->spage_table, &spte->elem);
 
@@ -902,82 +915,6 @@ lazy_load_segment (struct file *file, off_t ofs, uint8_t *upage,
 	}
 	return true;
 }
-
-/* Loads a segment starting at offset OFS in FILE at address
-   UPAGE.  In total, READ_BYTES + ZERO_BYTES bytes of virtual
-   memory are initialized, as follows:
-
-        - READ_BYTES bytes at UPAGE must be read from FILE
-          starting at offset OFS.
-
-        - ZERO_BYTES bytes at UPAGE + READ_BYTES must be zeroed.
-
-   The pages initialized by this function must be writable by the
-   user process if WRITABLE is true, read-only otherwise.
-
-   Return true if successful, false if a memory allocation error
-   or disk read error occurs. */
-bool
-load_segment (struct file *file, off_t ofs, uint8_t *upage,
-              uint32_t read_bytes, uint32_t zero_bytes, bool writable)
-{
-	ASSERT ((read_bytes + zero_bytes) % PGSIZE == 0);
-	ASSERT (pg_ofs (upage) == 0);
-	ASSERT (ofs % PGSIZE == 0);
-
-	file_seek (file, ofs);
-	while (read_bytes > 0 || zero_bytes > 0)
-	{
-		/* Calculate how to fill this page.
-			 We will read PAGE_READ_BYTES bytes from FILE
-			 and zero the final PAGE_ZERO_BYTES bytes. */
-		size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
-		size_t page_zero_bytes = PGSIZE - page_read_bytes;
-
-		/* Check if virtual page already allocated */
-		struct thread *t = thread_current ();
-		uint8_t *kpage = pagedir_get_page (t->pagedir, upage);
-
-		if (kpage == NULL) {
-
-			/* Get a new page of memory. */
-			// kpage = palloc_get_page (PAL_USER);
-			kpage = frame_allocate ();
-			if (kpage == NULL){
-				return false;
-			}
-
-			/* Add the page to the process's address space. */
-			if (!install_page (upage, kpage, writable))
-			{
-				// palloc_free_page (kpage);
-				frame_free (kpage);
-				return false;
-			}
-
-		} else {
-
-			/* Check if writable flag for the page should be updated */
-			if (writable && !pagedir_is_writable (t->pagedir, upage)) {
-				pagedir_set_writable (t->pagedir, upage, writable);
-			}
-
-		}
-
-		/* Load data into the page. */
-		if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes){
-			return false;
-		}
-		memset (kpage + page_read_bytes, 0, page_zero_bytes);
-
-		/* Advance. */
-		read_bytes -= page_read_bytes;
-		zero_bytes -= page_zero_bytes;
-		upage += PGSIZE;
-	}
-	return true;
-}
-
 
 /* Create a minimal stack by mapping a zeroed page at the top of
    user virtual memory. */
@@ -1011,7 +948,7 @@ setup_stack (void **esp)
    with palloc_get_page().
    Returns true on success, false if UPAGE is already mapped or
    if memory allocation fails. */
-static bool
+bool
 install_page (void *upage, void *kpage, bool writable)
 {
 	struct thread *t = thread_current ();
