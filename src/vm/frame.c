@@ -56,6 +56,7 @@ frame_init (void)
   lock_init (&frame_table_lock);
 }
 
+/* Initialises the frame table iterator. */
 static void
 init_iterator (void)
 {
@@ -66,8 +67,6 @@ init_iterator (void)
     is_initialised = true;
   }
 }
-
-// struct ftable_entry *get_frame_to_evict (void);
 
 /* Return frame table entry for the frame which holds the result of 
    the chosen eviction algorithm's frame of choice, to be evicted. */
@@ -136,19 +135,27 @@ frame_allocate (void)
   }
   else  /* Memory is full: eviction must occur. */
   {
-    /* Get victim page to be evicted. */
-    entry = get_frame_to_evict ();
-    void *page_to_evict = entry->kpage;
+    lock_acquire (&frame_table_lock);
 
-    /* Swap out victim page. */
-    size_t swap_slot = swap_out (page_to_evict);
+      /* Get victim page to be evicted. */
+      entry = get_frame_to_evict ();
+      void *page_to_evict = entry->kpage;
 
-    /* Store swap slot in supplemental page table entry,
-       and update flags. */
-    entry->spte->swap_index = swap_slot;
-    entry->spte->swapped = true;
-    entry->spte->disk = false;
-    entry->spte->loaded = false;
+      /* Swap out victim page. */
+      size_t swap_slot = swap_out (page_to_evict);
+
+      /* Store swap slot in supplemental page table entry,
+        and update flags. */
+      entry->spte->swap_index = swap_slot;
+      entry->spte->swapped = true;
+      entry->spte->disk = false;
+      entry->spte->loaded = false;
+      
+      /* Reinsert entry into frame table. */
+      hash_replace (&frame_table, &entry->elem);
+    
+    lock_release (&frame_table_lock);
+
 
     /* Free corresponding frame. */
     frame_free (page_to_evict);

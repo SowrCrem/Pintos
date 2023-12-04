@@ -20,6 +20,8 @@ void *system_call_function[] = {
 		[SYS_SEEK]     = syscall_seek,
 		[SYS_TELL]     = syscall_tell,
 		[SYS_CLOSE]    = syscall_close,
+		[SYS_MMAP]     = syscall_mmap,
+		[SYS_MUNMAP]   = syscall_munmap,
 };
 
 void
