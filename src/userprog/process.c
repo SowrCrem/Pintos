@@ -260,8 +260,8 @@ rs_manager_free (struct rs_manager *rs)
 	{
 		rs->running = false;
 		/* Increment semaphore to allow parent to return from wait. */
-		sema_up (&rs->child_exit_sema);
 		lock_release (&rs->exit_lock);
+		sema_up (&rs->child_exit_sema);
 	}
 }
 

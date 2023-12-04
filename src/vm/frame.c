@@ -1,5 +1,6 @@
 #include "../vm/frame.h"
 #include "../devices/swap.h"
+#include "../threads/vaddr.h"
 #include "../threads/thread.h"
 #include "../threads/synch.h"
 #include "../threads/malloc.h"
@@ -79,29 +80,33 @@ get_frame_to_evict (void)
   
   while (evictee == NULL)
   {
-    /* Iterate through hash table until frame with 
-       accessed bit set to 0 is found, then return. */
+    /* Iterate circularaly through hash table until frame with accessed
+       bit set to 0 is found, then return. */
     while (hash_next (&iterator))
     {
       struct ftable_entry *e = hash_entry (hash_cur (&iterator), 
                                            struct ftable_entry, elem);
 
-      /* Cannot evict if page is shared (frame is pinned). */
-      if (!e->pinned)
+      /* If accessed bit is 0, evict frame. */
+      if (!pagedir_is_accessed (e->owner->pagedir, e->spte->upage))
       {
-        /* If accessed bit is 0, evict frame. */
-        if (!pagedir_is_accessed (e->owner->pagedir, e->spte->upage))
+        /* Cannot evict pinned frames. */
+        if (e->pinned)
         {
+          printf ("(get_frame_to_evict) frame %d is pinned\n", e->spte->upage);
+          continue;
+        } else
+        {          
           printf ("(get_frame_to_evict) evicting frame %d\n", e->spte->upage);
           evictee = e;
           break;
         }
-        /* Otherwise, set accessed bit to 0. */
-        else
-        {
-          printf ("(get_frame_to_evict) accessing frame %d\n", e->spte->upage);
-          pagedir_set_accessed (e->owner->pagedir, e->spte->upage, false);
-        }
+      }
+      /* Otherwise, set accessed bit to 0 and continue. */
+      else
+      {
+        printf ("(get_frame_to_evict) accessing frame %d\n", e->spte->upage);
+        pagedir_set_accessed (e->owner->pagedir, e->spte->upage, false);
       }
     }
     /* If no frame with accessed bit set to 0 is found,
@@ -119,6 +124,10 @@ struct ftable_entry *
 frame_allocate (void)
 {
   void *kpage = palloc_get_page (PAL_USER);
+
+  /* Page offset should be 0. */
+  ASSERT (pg_ofs (kpage) == 0);
+
   struct ftable_entry *entry = NULL;
   
   if (kpage != NULL)
@@ -163,6 +172,9 @@ frame_allocate (void)
     /* Allocate new frame. */
     kpage = palloc_get_page (PAL_USER);
 
+    /* Page offset should be 0. */
+    ASSERT (pg_ofs (kpage) == 0);
+
     /* Page allocation should return freed page. */
     ASSERT (kpage == page_to_evict)
 
@@ -181,6 +193,9 @@ frame_allocate (void)
 void 
 frame_free (void *kpage) 
 {
+  ASSERT (pg_ofs (kpage) == 0);
+  ASSERT (kpage != NULL);
+  
   struct ftable_entry e_;
   e_.kpage = kpage;
 
