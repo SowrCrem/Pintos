@@ -9,6 +9,7 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 #include "threads/palloc.h"
+#include "threads/malloc.h"
 #include "vm/frame.h"
 
 /* Number of page faults processed. */
@@ -168,12 +169,30 @@ page_fault (struct intr_frame *f)
 		struct spt_entry *spte = hash_entry (h, struct spt_entry, elem);
 
 		/* Load page. */
-
-		if (load_segment (spte->file, spte->ofs, spte->upage, 
-											 spte->page_read_bytes, spte->page_zero_bytes, 
-											 spte->writable))
+		if (!spte->loaded)
 		{
-			// printf ("(page-fault) successfully loaded %d into memory\n", spte->upage);
+			/* If stack page. */
+			if (spte->stack_access)
+			{
+				void *kpage = frame_allocate();
+				install_page (spte->upage, kpage, spte->writable);
+				spte->loaded = true;
+			} else
+			{
+				/* Lazy load page from file system. */
+				// printf ("(page-fault) lazy loading %d into memory\n", spte->upage);
+				if (load_segment (spte->file, spte->ofs, spte->upage, 
+												 spte->page_read_bytes, spte->page_zero_bytes, 
+												 spte->writable))
+				{
+					// printf ("(page-fault) successfully loaded %d into memory\n", spte->upage);
+					return;
+				}
+			}
+		}
+		else
+		{
+			printf ("(page-fault) %d already loaded\n", spte->upage);
 			return;
 		}
 	} 
@@ -193,7 +212,7 @@ page_fault (struct intr_frame *f)
 		{
 			//printf("Passed max stack size check and is_user_vaddr check\n");
 			//Grow the stack by allocating a page
-			void *added_stack_page = pg_round_down(fault_addr);
+			void *added_stack_page = pg_round_down (fault_addr);
 
 			/* Add this stack page to spt */
 			//have a new spt entry for this stack page
@@ -215,19 +234,19 @@ page_fault (struct intr_frame *f)
 			if (kpage != NULL)
 			{
 				/* Install the new stack page */
-				bool success = install_page (added_stack_page, kpage, NULL);		
+				bool success = install_page (added_stack_page, kpage, spte->writable);		
 				if (!success) {
 					PANIC("install_page unsuccessful");
 				} 
 				else 
 				{
-					printf("Installed page successfully\n");
+					// printf("Installed page successfully\n");
 					return;
 				}
 				
 			} else 
 			{
-				palloc_free_page(kpage);
+				// palloc_free_page(kpage);
 				PANIC("Unable to allocate new stack page");
 			}
 		} 

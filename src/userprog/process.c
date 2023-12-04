@@ -946,7 +946,8 @@ setup_stack (void **esp)
 	spte->page_read_bytes = 0;
 	spte->page_zero_bytes = 0;
 	spte->writable = true;
-	spte->loaded = false;
+	spte->loaded = true;
+	spte->stack_access = true;
 
 	if (initial_stack_upage == NULL)
 	{
