@@ -123,11 +123,15 @@ thread_start (void)
   sema_down (&idle_started);
 }
 
-/* Returns the number of threads currently in the ready list */
+/* Returns the number of threads currently in the ready list. 
+   Disables interrupts to avoid any race-conditions on the ready list. */
 size_t
 threads_ready (void)
 {
-  return list_size (&ready_list);      
+  enum intr_level old_level = intr_disable ();
+  return list_size (&ready_list);
+  intr_set_level (old_level);
+  
 }
 
 /* Called by the timer interrupt handler at each timer tick.
@@ -311,6 +315,11 @@ thread_exit (void)
 
 #ifdef USERPROG
   process_exit ();
+#endif
+
+#ifdef VM
+  /* Remove all frames owned by thread. NEED TO FIX FUNCTION. */
+  // frame_remove_all (thread_current ());
 #endif
 
   /* Remove thread from all threads list, set our status to dying,

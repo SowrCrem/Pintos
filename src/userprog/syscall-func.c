@@ -4,6 +4,8 @@
 #include "../threads/malloc.h"
 #include "../lib/stdio.h"
 #include "../lib/string.h"
+#include "process.h"
+#include "../vm/mmap.h"
 
 static void halt (void);
 static void exit (int status);
@@ -18,6 +20,8 @@ static int write (int fd, const void *buffer, unsigned size);
 static void seek (int fd, unsigned position);
 static unsigned tell (int fd);
 static void close (int fd);
+static mapid_t mmap (int fd, void *addr);
+static void munmap (mapid_t mapping);
 
 /* Terminates by calling shutdown_power_off(). Seldom used because
 	 you lose information about possible deadlock situations. */
@@ -198,12 +202,17 @@ filesize (int fd)
 static int
 read (int fd, void *buffer, unsigned size)
 {
-	for (unsigned i = 0; i < size; i++)
+	unsigned i = 0;
+	while (i < size)
 	{
-		if (get_user_safe ((uint8_t *)(buffer + i)) == ERROR)
+		unsigned remaining = size - i;
+		unsigned chunk_size = remaining < PGSIZE ? remaining : PGSIZE;
+
+		if (get_user_safe ((uint8_t *) (buffer + i)) == ERROR)
 		{
-			terminate_userprog (ERROR);		/* read-bad-ptr fails without termination. */
+			terminate_userprog (ERROR);
 		}
+		i += chunk_size;
 	}
 
 	/* Cannot read from standard output. */
@@ -245,12 +254,41 @@ static int
 write (int fd, const void *buffer, unsigned size)
 {
 	/* Terminate process if buffer pointer is invalid. */
-	for (int i = 0; i < (int) size; i++)
+	unsigned i = 0;
+	while (i < size)
 	{
-		if (get_user_safe ((uint8_t *)(buffer + i)) == ERROR)
+		unsigned remaining = size - i;
+		unsigned chunk_size = remaining < PGSIZE ? remaining : PGSIZE;
+
+		if (get_user_safe ((uint8_t *) (buffer + i)) == ERROR)
 		{
 			terminate_userprog (ERROR);
 		}
+
+
+		/* Check page is writable if FD is not STDIN or STDOUT. */
+		if (!fd == STDIN_FILENO && !fd == STDOUT_FILENO)
+		{
+			printf ("(write) checking page %d writeable\n", 
+							pg_round_down (buffer + i));
+
+			void *upage = pg_round_down (buffer + i);
+			struct spt_entry *spte = spt_entry_lookup (upage);
+
+			// if (spte == NULL)
+			// {
+			// 	printf ("(write) ERROR: page %d not found\n", upage);
+			// 	terminate_userprog (ERROR);
+			// }
+
+			if (spte != NULL && !spte->writable)
+			{
+				printf ("(write) ERROR: page %d not writable\n", upage);
+				terminate_userprog (ERROR);
+			}
+		}
+
+		i += chunk_size;
 	}
 	
 	if (fd == STDIN_FILENO)
@@ -279,6 +317,7 @@ write (int fd, const void *buffer, unsigned size)
 	} 
 	else
 	{
+		/* Check FD in file descriptor table. */
 		struct file_entry *entry = file_entry_lookup (fd);
 
 		if (entry == NULL)
@@ -290,16 +329,16 @@ write (int fd, const void *buffer, unsigned size)
 
 		lock_acquire (&filesys_lock);
 
-		/* Deny writes if file name is the same as the current process exe_name. */
-		if (strcmp (entry->file_name, exe_name) == 0)
-		{
-			file_deny_write (entry->file);
-		} else 
-		{
-			file_allow_write (entry->file);
-		}
+			/* Deny writes if file name is the same as the current process exe_name. */
+			if (strcmp (entry->file_name, exe_name) == 0)
+			{
+				file_deny_write (entry->file);
+			} else 
+			{
+				file_allow_write (entry->file);
+			}
+			int result = (int) file_write (entry->file, buffer, size);
 
-		int result = (int) file_write (entry->file, buffer, size);
 		lock_release (&filesys_lock);
 
 		return result;
@@ -367,6 +406,29 @@ close (int fd)
 	lock_release (&filesys_lock);
 
 	free (file_entry);
+}
+
+/* Maps the file open as fd into the process's virtual address space. 
+	 The entire file is mapped into consecutive virtual pages starting at addr.
+
+	 Returns a mapping id that uniquely identifies the mapping within the process.
+	 On failure, returns -1. */
+static mapid_t
+mmap (int fd, void *addr)
+{
+
+	struct file_entry *file_entry = file_entry_lookup (fd);
+
+	mapid_t mapping = mmap_create (file_entry, addr);
+
+	return mapping;
+}
+
+
+static void 
+munmap (mapid_t mapping)
+{
+	mmap_destroy (mapping);
 }
 
 
@@ -510,4 +572,28 @@ syscall_close (struct intr_frame *if_ UNUSED)
 	
 	/* Execute close syscall . */
 	close (fd);
+
+
+}
+
+void
+syscall_mmap (struct intr_frame *if_)
+{
+	/* Retrieve fd, addr from if_ or an argv array. */
+	int fd = (int) syscall_get_arg (if_, 1);
+	void *addr = (void *) syscall_get_arg (if_, 2);
+
+	/* Get result and store it in if_->eax. */
+	mapid_t result = mmap (fd, addr);
+	if_->eax = result;
+}
+
+void
+syscall_munmap (struct intr_frame *if_)
+{
+	/* Retrieve mapping from if_ or an argv array. */
+	mapid_t mapping = (mapid_t) syscall_get_arg (if_, 1);
+
+	/* Execute munmap syscall . */
+	munmap (mapping);
 }

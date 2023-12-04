@@ -7,6 +7,8 @@
 
 /* Process identifier. */
 typedef int pid_t;
+typedef int mapid_t;
+
 #define PID_ERROR ((pid_t) -1)
 
 /* Maximum number of bytes */
@@ -30,5 +32,7 @@ void syscall_write    (struct intr_frame *if_);
 void syscall_seek     (struct intr_frame *if_);
 void syscall_tell     (struct intr_frame *if_);
 void syscall_close    (struct intr_frame *if_);
+void syscall_mmap     (struct intr_frame *if_);
+void syscall_munmap   (struct intr_frame *if_);
 
 #endif /* userprog/syscall-func.h */

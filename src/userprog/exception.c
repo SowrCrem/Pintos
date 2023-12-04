@@ -1,13 +1,19 @@
 #include "../lib/inttypes.h"
 #include "../lib/stdio.h"
 #include "../lib/stdlib.h"
-#include "userprog/exception.h"
-#include "userprog/gdt.h"
-#include "userprog/syscall.h"
-#include "userprog/process.h"
-#include "threads/interrupt.h"
-#include "threads/thread.h"
-#include "threads/vaddr.h"
+#include "../lib/string.h"
+#include "../lib/kernel/bitmap.h"
+#include "exception.h"
+#include "gdt.h"
+#include "syscall.h"
+#include "process.h"
+#include "../threads/interrupt.h"
+#include "../threads/thread.h"
+#include "../threads/vaddr.h"
+#include "../devices/swap.h"
+#include "../vm/frame.h"
+#include "memory-access.h"
+#include "process.h"
 #include "threads/palloc.h"
 #include "threads/malloc.h"
 #include "vm/frame.h"
@@ -113,6 +119,69 @@ kill (struct intr_frame *f)
 	}
 }
 
+/* Loads a page starting at offset OFS in FILE at address
+   UPAGE.
+
+   The page initialized by this function must be writable by the
+   user process if WRITABLE is true, read-only otherwise.
+
+   Return true if successful, false if a memory allocation error
+   or disk read error occurs. */
+static bool
+load_page (struct file *file, off_t ofs, uint8_t *upage,
+              uint32_t read_bytes, bool writable)
+{
+	ASSERT (pg_ofs (upage) == 0);
+	ASSERT (ofs % PGSIZE == 0);
+
+	/* TODO: Add file system synchronisation, add check for 
+		 lock held by current thread. */
+	file_seek (file, ofs);
+	/* Calculate how to fill this page.
+			We will read PAGE_READ_BYTES bytes from FILE
+			and zero the final PAGE_ZERO_BYTES bytes. */
+	size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
+	size_t page_zero_bytes = PGSIZE - page_read_bytes;
+
+	/* Check if virtual page already allocated */
+	struct thread *t = thread_current ();
+	
+	/* Get a new page of memory. */
+	struct ftable_entry *f = frame_allocate ();
+	uint8_t *kpage = f->kpage;
+
+	/* Add the page to the process's address space. */
+	if (!install_page (upage, kpage, writable))
+	{
+		frame_free (kpage);
+		return false;
+	}
+
+	/* Load data into the page. */
+	if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes)
+	{
+		return false;
+	}
+	/* Set remaining bytes to zero. */
+	memset (kpage + page_read_bytes, 0, page_zero_bytes);
+
+	return true;
+}
+
+static void
+spte_print (struct spt_entry *spte)
+{
+	printf ("(spte_print) upage: %d\n", spte->upage);
+	printf ("(spte_print) file: %d\n", spte->file);
+	printf ("(spte_print) ofs: %d\n", spte->ofs);
+	printf ("(spte_print) page_read_bytes: %d\n", spte->page_read_bytes);
+	printf ("(spte_print) writable: %d\n", spte->writable);
+	printf ("(spte_print) disk: %d\n", spte->disk);
+	printf ("(spte_print) loaded: %d\n", spte->loaded);
+	printf ("(spte_print) swap_index: %d\n", spte->swap_index);
+	printf ("(spte_print) swapped: %d\n", spte->swapped);
+}
+
 /* Page fault handler.  This is a skeleton that must be filled in
    to implement virtual memory.  Some solutions to task 2 may
    also require modifying this code.
@@ -138,9 +207,6 @@ page_fault (struct intr_frame *f)
 		 (#PF)". */
 	asm ("movl %%cr2, %0" : "=r" (fault_addr));
 
-
-	// printf ("(page-fault) fault_addr: %d\n", fault_addr);
-
 	/* Turn interrupts back on (they were only off so that we could
 		 be assured of reading CR2 before it changed). */
 	intr_enable ();
@@ -148,25 +214,63 @@ page_fault (struct intr_frame *f)
 	/* Count page faults. */
 	page_fault_cnt++;
 
+
+	// printf ("\n(page-fault) fault_addr: %d\n", fault_addr);
 #ifdef USERPROG
 	#ifdef VM
 
-	/* Get current thread. */
-	struct thread *t = thread_current ();
+	/* Terminate if address is above PHYS_BASE. */
+	if (is_user_vaddr (fault_addr))
+	{
+		/* Look up address in supplemental page table. */
+		void *upage = pg_round_down (fault_addr);
+		struct spt_entry spte;
+		spte.upage = upage;
 
-	/* Get supplemental page table. */
-	struct hash *spt = t->spage_table;
+		struct hash_elem *h = hash_find (thread_current ()->spage_table, &spte.elem);
 
-	/* Get supplemental page table entry. */
-	void *upage = pg_round_down (fault_addr);
-	struct spt_entry spte;
-	spte.upage = upage;
+		/* Lazy load page if entry found in supplemental page table. */
+		if (h != NULL) 
+		{
+			struct spt_entry *spte = hash_entry (h, struct spt_entry, elem);
 
-	/* Look up address in supplemental page table. */
-	struct hash_elem *h = hash_find (spt, &spte.elem);
+			/* DEBUG SPTE. */
+			// spte_print (spte);
 
-	if (h != NULL) {
-		struct spt_entry *spte = hash_entry (h, struct spt_entry, elem);
+			if (spte->swapped)
+			{
+				/* Swap in page if swapped. */
+				swap_in (spte->upage, spte->swap_index);
+				spte->swapped = false;
+				spte->loaded = true;
+				spte->swap_index = BITMAP_ERROR;
+				// printf ("(page-fault) successfully swapped %d into memory\n", spte->upage);
+				return;
+
+			} else if (spte->mmaped)
+			{
+				// printf ("(page-fault) ERROR: mmap'd page not yet implemented\n");
+			} else if (spte->disk)
+			{
+				if (!spte->loaded)
+				{
+					/* Load page if not already loaded. */
+					if (load_page (spte->file, spte->ofs, spte->upage, 
+														spte->page_read_bytes, spte->writable))
+					{
+						spte->loaded = true;
+						// printf ("(page-fault) successfully loaded %d into memory\n", spte->upage);
+						return;
+					}
+				}
+				else
+				{
+					printf ("(page-fault) ERROR: %d already in memory\n", upage);
+				}
+			}
+		}
+	}
+	
 
 		/* Load page. */
 		if (!spte->loaded)

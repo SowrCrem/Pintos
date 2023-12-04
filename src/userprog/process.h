@@ -26,6 +26,15 @@ struct spt_entry
 	struct file *file;          /* File pointer. */
 	off_t ofs;                  /* Offset of page in file. */
 	size_t page_read_bytes;     /* Number of bytes to read from file. */
+	bool writable;              /* Boolean if page is writable. */
+
+  bool disk;                  /* Boolean for disk pages. */
+	bool loaded;                /* Boolean for if page is loaded in memory. */
+
+  size_t swap_index;          /* Swap index for swapped pages. */
+  bool swapped;               /* Boolean for swapped pages. */
+
+  bool mmaped;                /* Boolean for mmap'd pages. */
 	size_t page_zero_bytes;     /* Number of bytes to zero. */
 	bool writable;              /* True if page is writable. */
 	
@@ -36,8 +45,8 @@ struct spt_entry
 	struct hash_elem elem; 			/* Hash table element. */
 };
 
-bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
-                   uint32_t read_bytes, uint32_t zero_bytes, bool writable);
+bool install_page (void *upage, void *kpage, bool writable);
+struct spt_entry *spt_entry_lookup (const void *upage);
 
 /* Represents an entry in the hash table for files held by a process. */
 struct file_entry
