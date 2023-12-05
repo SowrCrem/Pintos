@@ -137,7 +137,7 @@ load_page (struct file *file, off_t ofs, uint8_t *upage,
 
 	/* TODO: Assert file system synchronisation, add check for 
 		 lock held by current thread. */
-
+	// printf ("Entered load page function.\n");
 	file_seek (file, ofs);
 	/* Calculate how to fill this page.
 		 We will read PAGE_READ_BYTES bytes from FILE
@@ -152,16 +152,25 @@ load_page (struct file *file, off_t ofs, uint8_t *upage,
 	struct ftable_entry *f = frame_allocate (PAL_USER);
 	uint8_t *kpage = f->kpage;
 
+
+	// printf("Allocates frame correctly.\n");
+
 	/* Add the page to the process's address space. */
 	if (!install_page (upage, kpage, writable))
 	{
+		// printf("Does not install page correctly.\n");
+
 		frame_free (kpage);
 		return false;
 	}
 
+	
+
 	/* Add page into frame table. */
 	struct spt_entry *spte = spt_entry_lookup (pg_round_down (upage));
 	f->spte = spte;
+
+	// printf("The spt value given is: %d .\n", spte->upage);
 
 	/* Load data into the page. */
 	if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes)
@@ -278,6 +287,7 @@ page_fault (struct intr_frame *f)
 		struct spt_entry spte;
 		spte.upage = upage; 
 		struct hash_elem *h = hash_find (thread_current ()->spage_table, &spte.elem);
+		
 
 		if (h != NULL)
 		{

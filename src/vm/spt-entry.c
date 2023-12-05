@@ -35,12 +35,16 @@ spt_entry_destroy_func (struct hash_elem *e_, void *aux UNUSED)
 struct spt_entry *
 spt_entry_lookup (const void *upage)
 {
+
+  // printf ("Enters into spt entry lookup\n");
 	struct spt_entry spte;
 	spte.upage = upage;
 
 	struct hash_elem *e;
-	e = hash_find (&thread_current ()->spage_table, &spte.elem);
-	return e == NULL ? NULL : hash_entry (e, struct spt_entry, elem);
+	e = hash_find (thread_current ()->spage_table, &spte.elem);
+
+  // printf ("Correctly finds hash elem\n");
+  return e == NULL ? NULL : hash_entry (e, struct spt_entry, elem);
 }
 
 /* Create a new supplemental page table entry. */
