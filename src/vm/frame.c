@@ -95,11 +95,10 @@ get_frame_to_evict (void)
         /* Cannot evict pinned frames. */
         if (e->pinned)
         {
-          printf ("(get_frame_to_evict) frame %d is pinned\n", e->spte->upage);
+          // printf ("(get_frame_to_evict) frame %d is pinned\n", e->spte->upage);
           continue;
         } else
         {          
-          printf ("(get_frame_to_evict) evicting frame %d\n", e->spte->upage);
           evictee = e;
           break;
         }
@@ -107,7 +106,7 @@ get_frame_to_evict (void)
       /* Otherwise, set accessed bit to 0 and continue. */
       else
       {
-        printf ("(get_frame_to_evict) accessing frame %d\n", e->spte->upage);
+        // printf ("(get_frame_to_evict) accessing frame %d\n", e->spte->upage);
         pagedir_set_accessed (e->owner->pagedir, e->spte->upage, false);
       }
     }
@@ -143,8 +142,10 @@ frame_allocate (enum palloc_flags flags)
     entry->pinned = false;
 
     lock_acquire (&frame_table_lock);
-      hash_insert (&frame_table, &entry->elem); 
+      struct hash_elem *h = hash_insert (&frame_table, &entry->elem); 
     lock_release (&frame_table_lock);
+
+    // printf ("Is hash_elem added to frame table? %s \n", (h != &entry->elem) ? "Yes" : "No");
   }
   else  /* Memory is full: eviction must occur. */
   {
@@ -172,9 +173,10 @@ frame_allocate (enum palloc_flags flags)
     frame_free (page_to_evict);
 
     /* Allocate new frame. */
-    kpage = palloc_get_page (PAL_USER);
+    kpage =  palloc_get_page (PAL_USER); /* Currently returning null. */
 
-    /* Page offset should be 0. */
+    entry->kpage = kpage;
+    // /* Page offset should be 0. */
     ASSERT (pg_ofs (kpage) == 0);
 
     /* Page allocation should return freed page. */
@@ -200,10 +202,13 @@ frame_free (void *kpage)
 
   struct ftable_entry e_;
   e_.kpage = kpage;
+  // e_.owner = thread_current ();
+  // printf ("Is kpage null? %s", (kpage == NULL) ? "Yes" : "No");
 
   lock_acquire (&frame_table_lock);
   
     struct hash_elem *e = hash_find (&frame_table, &e_.elem);
+    // printf ("IS e null? %s\n", (e == NULL) ? "Yes" : "No");
     if (e != NULL)
     {
       struct ftable_entry *entry = hash_entry (e, struct ftable_entry, elem);

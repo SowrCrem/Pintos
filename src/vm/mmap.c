@@ -28,13 +28,13 @@ mmap_create (struct file_entry *file_entry, void *start)
     /* Find number of bytes in file. */
 
     /* Obtain a separate and independent reference to the file for each of its mappings. */
-    lock_acquire (&filesys_lock);
+    // lock_acquire (&filesys_lock);
 
         // printf ("About to open file.\n");
         struct file *file = file_reopen (file_entry->file);
         int read_bytes = (int) file_length (file);
 
-    lock_release (&filesys_lock);
+    // lock_release (&filesys_lock);
 
     if (start == 0)
     {
