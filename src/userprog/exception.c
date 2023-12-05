@@ -330,7 +330,7 @@ page_fault (struct intr_frame *f)
 			spte->stack_access = true;
 
 			/* Allocate a new stack page */
-			void *kpage = pg_round_down (frame_allocate());
+			void *kpage = frame_allocate()->kpage;
 			// use get_user_page
 			// hash_insert into spt 
 			struct hash_elem *h = hash_insert (thread_current()->spage_table, &spte->elem);
