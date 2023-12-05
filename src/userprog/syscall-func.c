@@ -6,6 +6,7 @@
 #include "../lib/string.h"
 #include "process.h"
 #include "../vm/mmap.h"
+#include "../vm/spt-entry.h"
 
 static void halt (void);
 static void exit (int status);

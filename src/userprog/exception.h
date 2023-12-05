@@ -8,7 +8,6 @@
 
 #define PUSHA_BYTES_BELOW 32
 #define PUSH_BYES_BELOW 4
-#define MAX_STACK_SIZE (8 * 1024 * 1024)
 
 void exception_init (void);
 void exception_print_stats (void);

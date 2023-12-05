@@ -1,5 +1,7 @@
 #include "../vm/frame.h"
+#include "../vm/spt-entry.h"
 #include "../devices/swap.h"
+#include "../userprog/pagedir.h"
 #include "../threads/vaddr.h"
 #include "../threads/thread.h"
 #include "../threads/synch.h"
@@ -42,7 +44,7 @@ frame_less (const struct hash_elem *a, const struct hash_elem *b,
 /* Frame table destroy function. 
 
    Not necessary as frame table is global. */
-void
+static void
 frame_destroy_func (struct hash_elem *e, void *aux UNUSED)
 {
   struct ftable_entry *entry = hash_entry (e, struct ftable_entry, elem);
@@ -119,11 +121,13 @@ get_frame_to_evict (void)
 
 /* Allocate a new frame and returns the pointer to the page.
     
-   Wrapper for palloc_get_page, called with FLAGS. */
+   Wrapper for palloc_get_page, called with FLAGS. 
+   
+   MUST ensure to set SPTE after page installion successful. */
 struct ftable_entry *
-frame_allocate (void)
+frame_allocate (enum palloc_flags flags)
 {
-  void *kpage = palloc_get_page (PAL_USER);
+  void *kpage = palloc_get_page (flags);
 
   /* Page offset should be 0. */
   ASSERT (pg_ofs (kpage) == 0);
@@ -150,18 +154,16 @@ frame_allocate (void)
       entry = get_frame_to_evict ();
       void *page_to_evict = entry->kpage;
 
-      /* Swap out victim page. */
+      /* Swap out victim page, if dirty or stack page. */
       size_t swap_slot = swap_out (page_to_evict);
 
       /* Store swap slot in supplemental page table entry,
         and update flags. */
-      entry->spte->swap_index = swap_slot;
       entry->spte->swapped = true;
-      entry->spte->disk = false;
-      entry->spte->loaded = false;
+      entry->spte->swap_index = swap_slot;
       
-      /* Reinsert entry into frame table. */
-      hash_replace (&frame_table, &entry->elem);
+      // /* Reinsert entry into frame table. */
+      // hash_replace (&frame_table, &entry->elem);
     
     lock_release (&frame_table_lock);
 
@@ -194,8 +196,8 @@ void
 frame_free (void *kpage) 
 {
   ASSERT (pg_ofs (kpage) == 0);
-  ASSERT (kpage != NULL);
-  
+  // ASSERT (kpage != NULL);
+
   struct ftable_entry e_;
   e_.kpage = kpage;
 
@@ -220,27 +222,27 @@ frame_free (void *kpage)
 /* TODO: Remove all frames that are owned by thread THREAD.
 
    Called on process exit. */
-void
-frame_remove_all (struct thread *thread)
-{
-  /* Cannot iteratively delete multiple elements as any modification
-     to the hash table invalidates the hash iterator.
+// static void
+// frame_remove_all (void)
+// {
+//   /* Cannot iteratively delete multiple elements as any modification
+//      to the hash table invalidates the hash iterator.
      
-     Could map elements to a list and then delete matching hash
-     elements by use of the list elem key, or similar. */
+//      Could map elements to a list and then delete matching hash
+//      elements by use of the list elem key, or similar. */
 
 
-  // init_iterator ();
-  // hash_first (&iterator, &frame_table);
+//   init_iterator ();
+//   hash_first (&iterator, &frame_table);
 
-  // while (hash_next (&iterator))
-  // {
-  //   struct ftable_entry *e = hash_entry (hash_cur (&iterator), 
-  //                                        struct ftable_entry, elem);
-  //   if (e->owner == thread)
-  //   {
-  //     hash_delete (&frame_table, &e->elem);
-  //     free (e);
-  //   }
-  // }
-}
+//   while (hash_next (&iterator))
+//   {
+//     struct ftable_entry *e = hash_entry (hash_cur (&iterator), 
+//                                          struct ftable_entry, elem);
+//     if (e->owner == thread)
+//     {
+//       hash_delete (&frame_table, &e->elem);
+//       free (e);
+//     }
+//   }
+// }

@@ -22,8 +22,7 @@ struct ftable_entry
 
 /* Frame table functions. */
 void frame_init (void);
-struct ftable_entry *frame_allocate (void);
+struct ftable_entry *frame_allocate (enum palloc_flags);
 void frame_free (void *);
-void frame_remove_all (struct thread *);
 
 #endif /* vm/frame.h */

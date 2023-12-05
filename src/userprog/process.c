@@ -15,6 +15,7 @@
 #include "../threads/vaddr.h"
 #include "../threads/malloc.h"
 #include "../vm/frame.h"
+#include "../vm/spt-entry.h"
 #include "../lib/string.h"
 #include "../lib/debug.h"
 #include "../lib/stdio.h"
@@ -336,48 +337,6 @@ process_wait (tid_t child_tid)
 
 	return exit_status;
 }
-
-
-/* SUPPLEMENTAL PAGE TABLE STRUCT AND FUNCTIONS */
-
-/* Supplemental page table hash function. */
-static unsigned 
-spt_entry_hash (const struct hash_elem *e, void *aux UNUSED)
-{
-	const struct spt_entry *spte = hash_entry (e, struct spt_entry, elem);
-	return hash_bytes (&spte->upage, sizeof spte->upage);
-}
-
-/* Supplemental page table comparison function. */
-static bool 
-spt_entry_less (const struct hash_elem *a, const struct hash_elem *b, 
-						void *aux UNUSED)
-{
-	const struct spt_entry *spte_a = hash_entry (a, struct spt_entry, elem);
-	const struct spt_entry *spte_b = hash_entry (b, struct spt_entry, elem);
-	return spte_a->upage < spte_b->upage;
-}
-
-/* Frees every spt_entry. */
-static void
-spt_entry_destroy_func (struct hash_elem *e_, void *aux UNUSED)
-{
-	struct spt_entry *e = hash_entry (e_, struct spt_entry, elem);
-	free (e);
-}
-
-/* Look up function for supplemental page table. */
-struct spt_entry *
-spt_entry_lookup (const void *upage)
-{
-	struct spt_entry spte;
-	spte.upage = upage;
-
-	struct hash_elem *e;
-	e = hash_find (&thread_current ()->spage_table, &spte.elem);
-	return e != NULL ? hash_entry (e, struct spt_entry, elem) : NULL;
-}
-
 
 /* Free the current process's resources. */
 void
@@ -741,8 +700,6 @@ load (const char *file_name, void (**eip) (void), void **esp)
 	return success;
 }
 
-bool install_page (void *upage, void *kpage, bool writable);
-
 /* Checks whether PHDR describes a valid, loadable segment in
    FILE and returns true if so, false otherwise. */
 static bool
@@ -799,6 +756,7 @@ lazy_load_segment (struct file *file, off_t ofs, uint8_t *upage,
 	ASSERT (pg_ofs (upage) == 0);
 	ASSERT (ofs % PGSIZE == 0);
 
+	file_seek (file, ofs);
 	/* Lazy load the pages. */
 	while (read_bytes > 0 || zero_bytes > 0)
 	{
@@ -813,45 +771,38 @@ lazy_load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		
 		/* Check if upage pointer already in supplemental page table. */
 		struct spt_entry s_find;
-		s_find.upage = pg_round_down (upage);
-
+		s_find.upage = pg_round_down ((void *) upage);
 		struct hash_elem *found = hash_find (t->spage_table, &s_find.elem);
+		// struct spt_entry *spte = spt_entry_lookup (pg_round_down (upage));
 		
+
 		/* Insert new page entry into supplemental page table, if found is NULL. */
 		if (found == NULL)
 		{
-			struct spt_entry *spte = malloc (sizeof (struct spt_entry));
-
-			spte->upage = upage;
-			spte->file = file;
-			spte->ofs = ofs;
-			spte->page_read_bytes = page_read_bytes;
-			spte->writable = writable;
-			spte->loaded = false;
-			spte->disk = true;
-			spte->swap_index = NULL;
-			spte->swapped = false;
-			spte->mmaped = false;
+			struct spt_entry *spte = 
+				spt_entry_create (upage, FILESYSTEM, file, ofs, page_read_bytes, writable);
 
 			struct hash_elem *h = hash_insert (t->spage_table, &spte->elem);
 
-			// if (h == NULL)
-			// 	printf ("(lazy_load_segment) page %d success\n", upage);
+			if (h != NULL)
+				printf ("(lazy_load_segment) ERROR: load page %d unsuccessful\n", upage);
 		}
 		else	/* If already in supplemental page table. */
 		{
+			struct spt_entry *spte = spt_entry_lookup (pg_round_down (upage));
 			// printf ("(lazy_load_segment) trying to replace %d\n", upage);
 
 			/* Check if writable flag for the page should be updated. */
-			struct spt_entry *spte = hash_entry (found, struct spt_entry, elem);
 
 			if (writable && !spte->writable) 
 			{
 				spte->writable = writable;
 			}
-			spte->page_read_bytes = page_read_bytes;
 
-			struct hash_elem *h = hash_replace (t->spage_table, &spte->elem);
+			/* Update number of bytes to read. */
+			spte->bytes = page_read_bytes;
+
+			hash_replace (t->spage_table, &spte->elem);
 
 			// if (h != &spte->elem)
 			// 	printf ("(lazy_load_segment) page %d writable flag updated\n", upage);
@@ -871,82 +822,6 @@ lazy_load_segment (struct file *file, off_t ofs, uint8_t *upage,
 	return true;
 }
 
-/* Loads a segment starting at offset OFS in FILE at address
-   UPAGE.  In total, READ_BYTES + ZERO_BYTES bytes of virtual
-   memory are initialized, as follows:
-
-        - READ_BYTES bytes at UPAGE must be read from FILE
-          starting at offset OFS.
-
-        - ZERO_BYTES bytes at UPAGE + READ_BYTES must be zeroed.
-
-   The pages initialized by this function must be writable by the
-   user process if WRITABLE is true, read-only otherwise.
-
-   Return true if successful, false if a memory allocation error
-   or disk read error occurs. */
-bool
-load_segment (struct file *file, off_t ofs, uint8_t *upage,
-              uint32_t read_bytes, uint32_t zero_bytes, bool writable)
-{
-	ASSERT ((read_bytes + zero_bytes) % PGSIZE == 0);
-	ASSERT (pg_ofs (upage) == 0);
-	ASSERT (ofs % PGSIZE == 0);
-
-	file_seek (file, ofs);
-	while (read_bytes > 0 || zero_bytes > 0)
-	{
-		/* Calculate how to fill this page.
-			 We will read PAGE_READ_BYTES bytes from FILE
-			 and zero the final PAGE_ZERO_BYTES bytes. */
-		size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
-		size_t page_zero_bytes = PGSIZE - page_read_bytes;
-
-		/* Check if virtual page already allocated */
-		struct thread *t = thread_current ();
-		uint8_t *kpage = pagedir_get_page (t->pagedir, upage);
-
-		if (kpage == NULL) {
-
-			/* Get a new page of memory. */
-			// kpage = palloc_get_page (PAL_USER);
-			kpage = frame_allocate ();
-			if (kpage == NULL){
-				return false;
-			}
-
-			/* Add the page to the process's address space. */
-			if (!install_page (upage, kpage, writable))
-			{
-				// palloc_free_page (kpage);
-				frame_free (kpage);
-				return false;
-			}
-
-		} else {
-
-			/* Check if writable flag for the page should be updated */
-			if (writable && !pagedir_is_writable (t->pagedir, upage)) {
-				pagedir_set_writable (t->pagedir, upage, writable);
-			}
-
-		}
-
-		/* Load data into the page. */
-		if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes){
-			return false;
-		}
-		memset (kpage + page_read_bytes, 0, page_zero_bytes);
-
-		/* Advance. */
-		read_bytes -= page_read_bytes;
-		zero_bytes -= page_zero_bytes;
-		upage += PGSIZE;
-	}
-	return true;
-}
-
-
 /* Create a minimal stack by mapping a zeroed page at the top of
    user virtual memory. */
 static bool
@@ -954,37 +829,38 @@ setup_stack (void **esp)
 {
 	/* Allocate and install initial stack page at load time */
 	uint8_t *initial_stack_upage = ((uint8_t *) PHYS_BASE) - PGSIZE;
-	struct spt_entry *spte = malloc (sizeof (struct spt_entry));
-	
-	spte->upage = initial_stack_upage;
-	spte->file = NULL;
-	spte->ofs = 0;
-	spte->page_read_bytes = 0;
-	spte->writable = true;
-	spte->loaded = true;
-	spte->stack_access = true;
+	struct spt_entry *spte = 
+		spt_entry_create (initial_stack_upage, STACK, NULL, 0, 0, true);
 
 	if (initial_stack_upage == NULL)
 	{
 		return false;
 	}
 
-	uint8_t *kpage;
-	bool success = false;
-
-	kpage = palloc_get_page (PAL_USER | PAL_ZERO);
-	if (kpage != NULL)
+	/* Allocate frame. */
+	struct ftable_entry *f = frame_allocate (PAL_USER | PAL_ZERO);
+	
+	if (f->kpage != NULL)
 	{
-		success = install_page (initial_stack_upage, kpage, true);
-		if (success)
+		if (install_page (spte->upage, f->kpage, spte->writable))
 		{
 			*esp = PHYS_BASE;
+			
+			/* Add entry to supplemental page table. */
 			hash_insert (thread_current()->spage_table, &spte->elem);
+
+			/* Add page to frame table. */
+			f->spte = spte;
+			return true;
 		}
 		else
-			palloc_free_page (kpage);
+		{
+			frame_free (f->kpage);
+			free (spte);
+		}
 	}
-	return success;
+
+	return false;
 }
 
 /* Adds a mapping from user virtual address UPAGE to kernel
@@ -997,7 +873,7 @@ setup_stack (void **esp)
    Returns true on success, false if UPAGE is already mapped or
    if memory allocation fails. */
 bool
-install_page (void *upage, void *kpage, bool writable)
+	install_page (void *upage, void *kpage, bool writable)
 {
 	struct thread *t = thread_current ();
 

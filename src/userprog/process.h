@@ -18,32 +18,7 @@ typedef int tid_t;
 /* Number of characters allowed to be processed from command line. */
 #define MAX_CMDLINE_LEN (128)
 
-/* Represents an entry in the hash table for supplemental page table. */
-struct spt_entry
-{
-	uint8_t *upage;             /* User virtual page. */
 
-	struct file *file;          /* File pointer. */
-	off_t ofs;                  /* Offset of page in file. */
-	size_t page_read_bytes;     /* Number of bytes to read from file. */
-	bool writable;              /* Boolean if page is writable. */
-
-  bool disk;                  /* Boolean for disk pages. */
-	bool loaded;                /* Boolean for if page is loaded in memory. */
-
-  size_t swap_index;          /* Swap index for swapped pages. */
-  bool swapped;               /* Boolean for swapped pages. */
-
-  bool mmaped;                /* Boolean for mmap'd pages. */
-	size_t page_zero_bytes;     /* Number of bytes to zero. */
-	
-  bool stack_access;          /* True if page fault is a stack access */
-	
-	struct hash_elem elem; 			/* Hash table element. */
-};
-
-bool install_page (void *upage, void *kpage, bool writable);
-struct spt_entry *spt_entry_lookup (const void *upage);
 
 /* Represents an entry in the hash table for files held by a process. */
 struct file_entry
@@ -52,6 +27,7 @@ struct file_entry
 		struct file *file;                        /* Pointer to file. */
     char file_name[MAX_CMDLINE_LEN];          /* File name. */
 		int fd;                                   /* File identifier. */
+    struct spt_entry *mapping;                /* Entry for the first mapping page. */
 };
 
 /* A relationship manager for user processes.
