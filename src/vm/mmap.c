@@ -45,7 +45,7 @@ mmap_create (struct file_entry *file_entry, void *start)
  
 
     /* Checks if mapping would overwrite in a space reserved for the stack. */
-    bool space_reserved_for_stack = (upage >= PHYS_BASE - MAX_STACK_SIZE); 
+    bool space_reserved_for_stack = (upage <= PHYS_BASE - MAX_STACK_SIZE); 
 
     if (s_find == NULL || !space_reserved_for_stack)
     {
