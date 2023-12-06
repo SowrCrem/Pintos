@@ -50,8 +50,8 @@ syscall_handler (struct intr_frame *if_)
 		/* De-reference frame pointer. */
 		if_->frame_pointer = (void *) (*(uint32_t *) if_->frame_pointer);
 
-		/* Save stack pointer onto thread. */
-		// thread_current ()->saved_esp = if_->esp;
+		/* Save stack pointer onto thread, in case of stack growth. */
+		thread_current ()->saved_esp = if_->esp;
 
 		/* Execute corresponding syscall function. */
 		syscall_execute_function (syscall_no, if_);

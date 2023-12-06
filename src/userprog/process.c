@@ -129,15 +129,17 @@ file_entry_lookup (int fd)
 	entry.fd = fd;
 
 	lock_acquire (&rs->file_table_lock);
-	e = hash_find (&table, &entry.file_elem);
-	
-	if (e == NULL)
-	{
-		lock_release (&rs->file_table_lock);
-		return NULL;
-	}
 
-	f = hash_entry (e, struct file_entry, file_elem);
+		e = hash_find (&table, &entry.file_elem);
+		
+		if (e == NULL)
+		{
+			lock_release (&rs->file_table_lock);
+			return NULL;
+		}
+
+		f = hash_entry (e, struct file_entry, file_elem);
+
 	lock_release (&rs->file_table_lock);
 	return f;
 }
@@ -209,11 +211,13 @@ rs_manager_init (struct rs_manager *parent, struct thread *child)
 	child->rs_manager = rs;
 }
 
-/* Runs on process exit. Frees rs_manager RS's associated memory if no
+/* Runs on process exit. Frees thread's rs_manager associated memory if no
    other references to RS are found.  */
 static void
-rs_manager_free (struct rs_manager *rs)
+process_resource_free (struct thread *t)
 {
+	struct rs_manager *rs = t->rs_manager;
+
 	ASSERT (rs != NULL);
 
 	/* Empty children list and free their respective rs_manager if child
@@ -238,16 +242,38 @@ rs_manager_free (struct rs_manager *rs)
 		}
 	}
 
-	/* Free the file descriptor table and close executable file. */
-	lock_acquire (&filesys_lock);
+	#ifdef VM
+		bool vm_lock_held = lock_held_by_current_thread (&vm_lock);
+		
+		if (!vm_lock_held)
+			lock_acquire (&vm_lock);
 
+		/* Destroy process's supplemental page table. */
+		hash_destroy (t->spage_table, &spt_entry_destroy_func);
+		free (t->spage_table);
+		
+		if (!vm_lock_held)
+			lock_release (&vm_lock);
+	#endif
+
+	/* Free the file descriptor table and close executable file. */
+	bool filesys_lock_held = lock_held_by_current_thread (&filesys_lock);
+	
+	if (!filesys_lock_held)
+		lock_acquire (&filesys_lock);
+
+	bool fd_lock_held = lock_held_by_current_thread (&rs->file_table_lock);
+
+	if (!fd_lock_held)
 		lock_acquire (&rs->file_table_lock);
 
-			hash_destroy (&rs->file_table, &file_table_destroy_func);
+		hash_destroy (&rs->file_table, &file_table_destroy_func);
 
+	if (!fd_lock_held)
 		lock_release (&rs->file_table_lock);
 
-	lock_release (&filesys_lock);
+	if (!filesys_lock_held)
+		lock_release (&filesys_lock);
 
 	lock_acquire (&rs->exit_lock);
 	/* If it does not have a parent rs_manager. */
@@ -347,13 +373,7 @@ process_exit (void)
 
 	/* Increments child_exit_sema so parent process can return from
 		 wait. Also frees memory for rs_manager if certain conditions met. */
-	rs_manager_free (cur->rs_manager);
-	
-	#ifdef VM
-		/* Destroy the current process's supplemental page table. */
-		hash_destroy (cur->spage_table, &spt_entry_destroy_func);
-		free (cur->spage_table);
-	#endif
+	process_resource_free (cur);
 
 	/* Destroy the current process's page directory and switch back
 		 to the kernel-only page directory. */
@@ -393,6 +413,7 @@ process_activate (void)
 static void
 push_string_to_stack (void **esp, char *s)
 {
+	thread_current ()->saved_esp = *esp;
 	int len = strlen(s) + 1;
 	*esp -= len;
 	strlcpy(*esp, s, len);
@@ -402,6 +423,7 @@ push_string_to_stack (void **esp, char *s)
 static void
 push_int_to_stack (void **esp, int x)
 {
+	thread_current ()->saved_esp = *esp;
 	*esp -= sizeof (int);
 	*((int *) *esp) = x;
 }
@@ -410,6 +432,7 @@ push_int_to_stack (void **esp, int x)
 static void
 push_pointer_to_stack (void **esp, void *ptr)
 {
+	thread_current ()->saved_esp = *esp;
 	*esp -= sizeof (void *);
 	*((int **) *esp) = (int *) ptr;
 }
@@ -594,6 +617,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
 		/* Initialise supplemental page table for current thread. */
 		t->spage_table = malloc (sizeof (struct hash));
 		hash_init (t->spage_table, &spt_entry_hash, &spt_entry_less, NULL);
+		lock_init (&t->spage_table_lock);
 	#endif
 
 	/* Open executable file. */
@@ -832,30 +856,28 @@ setup_stack (void **esp)
 	struct spt_entry *spte = 
 		spt_entry_create (initial_stack_upage, STACK, NULL, 0, 0, true);
 
-	if (initial_stack_upage == NULL)
+	if (spte == NULL)
 	{
 		return false;
 	}
 
 	/* Allocate frame. */
-	struct ftable_entry *f = frame_allocate (PAL_USER | PAL_ZERO);
+	void *kpage = frame_allocate (PAL_USER | PAL_ZERO);
 	
-	if (f->kpage != NULL)
+	if (kpage != NULL)
 	{
-		if (install_page (spte->upage, f->kpage, spte->writable))
+		if (frame_install_page (spte, kpage))
 		{
 			*esp = PHYS_BASE;
 			
 			/* Add entry to supplemental page table. */
 			hash_insert (thread_current()->spage_table, &spte->elem);
 
-			/* Add page to frame table. */
-			f->spte = spte;
 			return true;
 		}
 		else
 		{
-			frame_free (f->kpage);
+			frame_free (kpage);
 			free (spte);
 		}
 	}

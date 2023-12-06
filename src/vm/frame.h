@@ -3,10 +3,21 @@
 
 #include "../lib/stdbool.h"
 #include "../lib/stdint.h"
+#include "../lib/debug.h"
 #include "../lib/kernel/hash.h"
-#include "../threads/thread.h"
-#include "../threads/palloc.h"
+#include "../devices/swap.h"
+#include "../userprog/pagedir.h"
 #include "../userprog/process.h"
+#include "../threads/thread.h"
+#include "../threads/vaddr.h"
+#include "../threads/thread.h"
+#include "../threads/synch.h"
+#include "../threads/palloc.h"
+#include "../threads/malloc.h"
+#include "../vm/spt-entry.h"
+
+/* Global virtual memory lock. */
+extern struct lock vm_lock;
 
 /* Frame table entry structure. */
 struct ftable_entry
@@ -22,7 +33,9 @@ struct ftable_entry
 
 /* Frame table functions. */
 void frame_init (void);
-struct ftable_entry *frame_allocate (enum palloc_flags);
+void *frame_allocate (enum palloc_flags);
 void frame_free (void *);
+bool frame_install_page (struct spt_entry *, void *);
+void frame_uninstall_page (void *upage);
 
 #endif /* vm/frame.h */

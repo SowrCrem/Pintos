@@ -25,8 +25,7 @@ void
 spt_entry_destroy_func (struct hash_elem *e_, void *aux UNUSED)
 {
 	struct spt_entry *e = hash_entry (e_, struct spt_entry, elem);
-  frame_free (pagedir_get_page (thread_current ()->pagedir, e->upage));
-	free (e);
+  spt_entry_delete (e);
 }
 
 /* Look up function for supplemental page table, given UPAGE.
@@ -52,19 +51,33 @@ struct spt_entry *
 spt_entry_create (void *upage, enum page_type type, struct file *file, 
             off_t ofs, size_t bytes, bool writable)
 {
+  ASSERT (type == FILESYSTEM || type == STACK || type == MMAP);
+  ASSERT (upage != NULL);
+
   struct spt_entry *spte = malloc (sizeof (struct spt_entry));
   if (spte == NULL)
     return NULL;
 
   spte->upage = upage;
   spte->type = type;
+  // spte->owner = thread_current ();
   spte->file = file;
   spte->ofs = ofs;
   spte->bytes = bytes;
   spte->writable = writable;
 
+  /* Set swapped to false and swap slot to error. */
   spte->swapped = false;
-  spte->swap_index = BITMAP_ERROR;
+  spte->swap_slot = BITMAP_ERROR;
 
   return spte;
+}
+
+/* Delete supplemental page table entry, and associated resources. */
+void
+spt_entry_delete (struct spt_entry *spte)
+{
+  ASSERT (spte != NULL);
+  frame_uninstall_page (spte->upage);
+  free (spte);
 }

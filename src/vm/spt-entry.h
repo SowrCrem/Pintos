@@ -12,6 +12,7 @@
 #include "userprog/pagedir.h"
 #include "vm/frame.h"
 
+/* Maximum stack size (8 MB). */
 #define MAX_STACK_SIZE (1 << 23)
 
 /* Status of page initialisation. */
@@ -25,19 +26,19 @@ enum page_type
 /* Represents an entry in the hash table for supplemental page table. */
 struct spt_entry
 {
-	void *upage;                /* User virtual page. */
+  // struct thread *owner;       /* Owning thread. */
 
-  enum page_type type;         /* Status of page initialisation type. */
+	void *upage;                /* User virtual page. */
+  enum page_type type;        /* Status of page initialisation type. */
+
+  bool swapped;               /* Boolean for swapped pages. */
+  size_t swap_slot;          /* Swap index for swapped pages. */
+
 	struct file *file;          /* File pointer. */
 	off_t ofs;                  /* Offset of page in file. */
 	size_t bytes;               /* Number of bytes to read from file. */
 	bool writable;              /* Boolean if page is read-only or not. */
 
-	// bool loaded;                /* Boolean for if page is loaded in memory. */
-
-  bool swapped;               /* Boolean for swapped pages. */
-  size_t swap_index;          /* Swap index for swapped pages. */
-	
 	struct hash_elem elem; 			/* Hash table element for supplemental page table. */
 };
 
@@ -49,5 +50,6 @@ struct spt_entry *spt_entry_lookup (const void *);
 struct spt_entry *spt_entry_create (void *upage, enum page_type type, 
                                     struct file *file, off_t ofs, 
                                     size_t bytes, bool writable);
+void spt_entry_delete (struct spt_entry *spte);
 
 #endif /* vm/spt-entry.h */

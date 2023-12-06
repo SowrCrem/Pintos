@@ -1,14 +1,4 @@
 #include "../vm/frame.h"
-#include "../vm/spt-entry.h"
-#include "../devices/swap.h"
-#include "../userprog/pagedir.h"
-#include "../threads/vaddr.h"
-#include "../threads/thread.h"
-#include "../threads/synch.h"
-#include "../threads/malloc.h"
-#include "../threads/palloc.h"
-#include "../lib/kernel/hash.h"
-#include "../lib/debug.h"
 
 /* Global frame table. */
 static struct hash frame_table;
@@ -16,21 +6,20 @@ static struct hash frame_table;
 /* Global frame table iterator. */
 static struct hash_iterator iterator;
 
-/* Global frame table lock. */
-static struct lock frame_table_lock;
+/* Global virtual memory lock. */
+struct lock vm_lock;
 
 /* Frame table hash function.
 
-   Uses OWNER and KPAGE members in ftable_entry to form the key. */
+   Uses SPTE member in ftable_entry to form the key. */
 static unsigned 
 frame_hash (const struct hash_elem *e_, void *aux UNUSED) 
 {
   const struct ftable_entry *e = 
       hash_entry (e_, struct ftable_entry, elem);
-  unsigned kpage_hash = hash_bytes (&e->kpage, sizeof (e->kpage));
-  unsigned owner_hash = hash_bytes (&e->owner, sizeof (e->owner));
+  unsigned spte_hash = hash_bytes (&e->spte, sizeof (e->spte));
   
-  return kpage_hash + owner_hash;
+  return spte_hash;
 }
 
 /* Frame table comparison function. */
@@ -56,13 +45,16 @@ void
 frame_init (void) 
 {
   hash_init (&frame_table, frame_hash, frame_less, NULL);
-  lock_init (&frame_table_lock);
+  lock_init (&vm_lock);
 }
 
 /* Initialises the frame table iterator. */
 static void
 init_iterator (void)
 {
+  ASSERT (lock_held_by_current_thread (&vm_lock));
+
+  /* Initialise iterator if not already initialised. */
   static bool is_initialised = false;
   if (!is_initialised)
   {
@@ -76,6 +68,8 @@ init_iterator (void)
 static struct ftable_entry *
 get_frame_to_evict (void)
 {
+  ASSERT (lock_held_by_current_thread (&vm_lock));
+
   /* Find frame where accessed bit is 0. */
   init_iterator ();
   struct ftable_entry *evictee = NULL;
@@ -115,139 +109,183 @@ get_frame_to_evict (void)
        a circular data structure. */
     hash_first (&iterator, &frame_table);
   }
+
+  ASSERT (evictee->kpage != NULL);
+
   return evictee;
 }
 
-/* Allocate a new frame and returns the pointer to the page.
-    
-   Wrapper for palloc_get_page, called with FLAGS. 
-   
-   MUST ensure to set SPTE after page installion successful. */
-struct ftable_entry *
-frame_allocate (enum palloc_flags flags)
+/* Evicts a frame from the frame table and returns the KPAGE of
+   the newly available frame. */
+static void *
+evict_frame (void)
 {
-  void *kpage = palloc_get_page (flags);
+  ASSERT (lock_held_by_current_thread (&vm_lock));
 
-  /* Page offset should be 0. */
-  ASSERT (pg_ofs (kpage) == 0);
+  /* Get frame that is evictable. */
+  struct ftable_entry *frame_to_evict = get_frame_to_evict ();
 
-  struct ftable_entry *entry = NULL;
-  
-  if (kpage != NULL)
+  /* Frame should have valid supplemental page table entry. */
+  ASSERT (frame_to_evict->spte != NULL);
+
+  /* Get page directory and user virtual address of page to evict. */
+  uint32_t *pd = frame_to_evict->owner->pagedir;
+  void *upage = frame_to_evict->spte->upage;
+
+  /* Get kernel virtual address of page to evict. */
+  void* kpage_to_evict = pagedir_get_page (pd, upage);
+
+  /* Clear page from page directory. */
+  pagedir_clear_page (pd, upage);
+
+  /* Swap out victim page, if dirty or stack page. */
+  if (pagedir_is_dirty (pd, upage) ||
+      frame_to_evict->spte->type == STACK)
   {
-    entry = malloc (sizeof (struct ftable_entry));
-    entry->owner = thread_current ();
-    entry->kpage = kpage;
-    entry->spte = NULL;
-    entry->pinned = false;
-
-    lock_acquire (&frame_table_lock);
-      struct hash_elem *h = hash_insert (&frame_table, &entry->elem); 
-    lock_release (&frame_table_lock);
-
-    // printf ("Is hash_elem added to frame table? %s \n", (h != &entry->elem) ? "Yes" : "No");
-  }
-  else  /* Memory is full: eviction must occur. */
-  {
-    lock_acquire (&frame_table_lock);
-
-      /* Get victim page to be evicted. */
-      entry = get_frame_to_evict ();
-      void *page_to_evict = entry->kpage;
-
-      /* Swap out victim page, if dirty or stack page. */
-      size_t swap_slot = swap_out (page_to_evict);
-
-      /* Store swap slot in supplemental page table entry,
-        and update flags. */
-      entry->spte->swapped = true;
-      entry->spte->swap_index = swap_slot;
-      
-      // /* Reinsert entry into frame table. */
-      // hash_replace (&frame_table, &entry->elem);
+    /* Set swapped bit to true. */
+    frame_to_evict->spte->swapped = true;
     
-    lock_release (&frame_table_lock);
+    /* Swap out page. */
+    size_t swap_slot = swap_out (kpage_to_evict);
 
+    /* Kernel panic if swap partition is full. */ 
+    if (swap_slot == BITMAP_ERROR)
+      PANIC ("Swap partition is full.");
 
-    /* Free corresponding frame. */
-    frame_free (page_to_evict);
-
-    /* Allocate new frame. */
-    kpage =  palloc_get_page (PAL_USER); /* Currently returning null. */
-
-    entry->kpage = kpage;
-    // /* Page offset should be 0. */
-    ASSERT (pg_ofs (kpage) == 0);
-
-    /* Page allocation should return freed page. */
-    ASSERT (kpage == page_to_evict)
-
-    /* KPAGE should not be null if eviction is successful. */
-    ASSERT (kpage != NULL);
+    /* Update swap slot in supplemental page table. */
+    frame_to_evict->spte->swap_slot = swap_slot;
   }
+  
+  /* Remove supplemental page table entry from frame table. */
+  frame_to_evict->spte = NULL;
 
-  ASSERT (entry != NULL);
-  return entry;
+  return kpage_to_evict;  
 }
 
-/* Frees the frame FRAME, if owned by current thread, and removes the
+/* Returns the kernel virtual memory pointer to the newly allocated 
+   "frame" (kernel page mapping to physical memory).  
+
+   Performs eviction if no pages are available. 
+    
+   Wrapper for palloc_get_page, called with FLAGS. */
+void *
+frame_allocate (enum palloc_flags flags)
+{ 
+  /* Assert flags are valid. */
+  ASSERT (flags & PAL_USER);
+
+  void *kpage = palloc_get_page (flags);
+  if (kpage == NULL)
+  {
+    /* Perform eviction. */
+    bool lock_held = lock_held_by_current_thread (&vm_lock);
+    if (!lock_held)
+      lock_acquire (&vm_lock);
+
+    kpage = evict_frame ();
+
+    if (!lock_held)
+      lock_release (&vm_lock);
+  }
+
+  ASSERT (kpage != NULL);
+  return kpage;
+}
+
+// get_frame_for_page(struct page *) {
+  
+// }
+
+/* Clears the frame FRAME, if owned by current thread, and removes the
    corresponding entry in frame table. 
 
    Wrapper for palloc_free_page. */
 void 
 frame_free (void *kpage) 
 {
-  ASSERT (pg_ofs (kpage) == 0);
-  // ASSERT (kpage != NULL);
+  ASSERT (lock_held_by_current_thread (&vm_lock));
+
+  if (kpage == NULL)
+    return;
 
   struct ftable_entry e_;
   e_.kpage = kpage;
-  // e_.owner = thread_current ();
-  // printf ("Is kpage null? %s", (kpage == NULL) ? "Yes" : "No");
-
-  lock_acquire (&frame_table_lock);
+  e_.owner = thread_current ();
   
-    struct hash_elem *e = hash_find (&frame_table, &e_.elem);
-    // printf ("IS e null? %s\n", (e == NULL) ? "Yes" : "No");
-    if (e != NULL)
-    {
-      struct ftable_entry *entry = hash_entry (e, struct ftable_entry, elem);
+  struct hash_elem *e = hash_find (&frame_table, &e_.elem);
+  if (e != NULL)
+  {
+    struct ftable_entry *entry = hash_entry (e, struct ftable_entry, elem);
 
-      /* Delete frame from hash table and free memory. */
-      hash_delete (&frame_table, &entry->elem);
-      free (entry);
-
-      /* Free page at kernel virtual address KPAGE. */
-      palloc_free_page (kpage);
-    }
-
-  lock_release (&frame_table_lock);
+    /* Delete frame from hash table and free memory. */
+    hash_delete (&frame_table, &entry->elem);
+    free (entry);
+  }
+  
+  /* Free page at kernel virtual address KPAGE. */
+  palloc_free_page (kpage);
 }
 
-/* TODO: Remove all frames that are owned by thread THREAD.
+/* Uninstall user page UPAGE located in supplemental page table and 
+   remove entry from frame table. */
+void
+frame_uninstall_page (void *upage)
+{
+  ASSERT (lock_held_by_current_thread (&vm_lock));
 
-   Called on process exit. */
-// static void
-// frame_remove_all (void)
-// {
-//   /* Cannot iteratively delete multiple elements as any modification
-//      to the hash table invalidates the hash iterator.
-     
-//      Could map elements to a list and then delete matching hash
-//      elements by use of the list elem key, or similar. */
+  /* Get kernel virtual address mapping to user virtual address UPAGE. */
+  uint32_t *pd = thread_current ()->pagedir;
+  void *kpage = pagedir_get_page (pd, upage);
 
+  /* Clear page from page directory. */
+  pagedir_clear_page (pd, upage);
 
-//   init_iterator ();
-//   hash_first (&iterator, &frame_table);
+  /* Remove entry from frame table. */
+  frame_free (kpage);
+}
 
-//   while (hash_next (&iterator))
-//   {
-//     struct ftable_entry *e = hash_entry (hash_cur (&iterator), 
-//                                          struct ftable_entry, elem);
-//     if (e->owner == thread)
-//     {
-//       hash_delete (&frame_table, &e->elem);
-//       free (e);
-//     }
-//   }
-// }
+/* Install UPAGE located in SPTE and add entry to frame table. */
+bool
+frame_install_page (struct spt_entry *spte, void *kpage)
+{
+  void *upage = spte->upage;
+  bool writable = spte->writable;
+
+  ASSERT (is_user_vaddr (upage));
+  ASSERT (kpage != NULL);
+ 
+  // ASSERT (pg_ofs (upage) == 0);
+  // ASSERT (pg_ofs (kpage) == 0);
+  // ASSERT (upage != NULL);
+  // ASSERT (kpage != NULL);
+
+  /* Install page. */
+  bool success = install_page (upage, kpage, writable);
+
+  if (success)
+  {
+    bool lock_held = lock_held_by_current_thread (&vm_lock);
+    if (!lock_held)
+      lock_acquire (&vm_lock);
+
+    /* Add entry to frame table. */
+    struct ftable_entry *e = malloc (sizeof (struct ftable_entry));
+    if (e == NULL)
+      return false;
+
+    e->owner = thread_current ();
+    e->kpage = kpage;
+    e->spte = spte;
+    e->pinned = false;
+
+    hash_insert (&frame_table, &e->elem);
+
+    if (!lock_held)
+      lock_release (&vm_lock);
+    
+    /* Set accessed bit to 1 (clock page replacement algorithm). */
+    pagedir_set_accessed (e->owner->pagedir, upage, true);
+  }
+
+  return success;
+}

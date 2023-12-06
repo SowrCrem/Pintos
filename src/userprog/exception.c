@@ -129,34 +129,32 @@ kill (struct intr_frame *f)
    Return true if successful, false if a memory allocation error
    or disk read error occurs. */
 static bool
-load_page (struct file *file, off_t ofs, uint8_t *upage,
-              uint32_t read_bytes, bool writable)
+load_page_filesys (struct spt_entry *spte)
 {
+	ASSERT (lock_held_by_current_thread (&filesys_lock));
+
+	/* Get metadata from supplemental page table entry. */
+	struct file *file = spte->file;
+	off_t ofs = spte->ofs;
+	size_t read_bytes = spte->bytes;
+	bool writable = spte->writable;
+	void *upage = spte->upage;
+
 	ASSERT (pg_ofs (upage) == 0);
 	ASSERT (ofs % PGSIZE == 0);
 
-	/* TODO: Assert file system synchronisation, add check for 
-		 lock held by current thread. */
-	// printf ("Entered load page function.\n");
 	file_seek (file, ofs);
 	/* Calculate how to fill this page.
-		 We will read PAGE_READ_BYTES bytes from FILE
-		 and zero the final PAGE_ZERO_BYTES bytes. */
+		We will read PAGE_READ_BYTES bytes from FILE
+		and zero the final PAGE_ZERO_BYTES bytes. */
 	size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
 	size_t page_zero_bytes = PGSIZE - page_read_bytes;
-
-	/* Check if virtual page already allocated */
-	// struct thread *t = thread_current ();
 	
 	/* Get new page of memory. */
-	struct ftable_entry *f = frame_allocate (PAL_USER);
-	uint8_t *kpage = f->kpage;
-
-
-	// printf("Allocates frame correctly.\n");
+	void *kpage = frame_allocate (PAL_USER);
 
 	/* Add the page to the process's address space. */
-	if (!install_page (upage, kpage, writable))
+	if (!frame_install_page (spte, kpage))
 	{
 		printf("Does not install page correctly.\n");
 
@@ -164,51 +162,49 @@ load_page (struct file *file, off_t ofs, uint8_t *upage,
 		return false;
 	}
 
-	
-
-	/* Add page into frame table. */
-	struct spt_entry *spte = spt_entry_lookup (pg_round_down (upage));
-	f->spte = spte;
-
-	// printf("The spt value given is: %d .\n", spte->upage);
-
 	/* Load data into the page. */
 	if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes)
 	{
+		lock_release (&vm_lock);
 		return false;
 	}
+
 	/* Set remaining bytes to zero. */
 	memset (kpage + page_read_bytes, 0, page_zero_bytes);
 
 	return true;
 }
 
-/* Loads page in from swap disk. */
+/* Loads page in from swap disk into a new page in the user pool.
+
+	 Returns TRUE if successful, and FALSE otherwise. */
 static bool
 load_page_swap (struct spt_entry *spte)
 {
+	ASSERT (lock_held_by_current_thread (&vm_lock));
+
 	ASSERT (spte->swapped);
 
 	/* Get new page of memory. */
-	struct ftable_entry *f = frame_allocate (PAL_USER | PAL_ZERO);
+	void* kpage = frame_allocate (PAL_USER | PAL_ZERO);
 
 	/* Load data into the page. */
-	swap_in (f->kpage, spte->swap_index);
+	swap_in (kpage, spte->swap_slot);
 
+	/* Set swapped to false and swap slot to default error value. */
 	spte->swapped = false;
-	spte->swap_index = BITMAP_ERROR;
+	spte->swap_slot = BITMAP_ERROR;
 
-	/* Add the page to the process's address space. */
-	if (!install_page (spte->upage, f->kpage, spte->writable))
+	/* Install the page into the frame. */
+	if (!frame_install_page (spte, kpage))
 	{
-		frame_free (f->kpage);
+		frame_free (kpage);
 		return false;
 	}
 
-	/* Add page into frame table. */
-	f->spte = spte;
-
-	/* Set page as dirty. */
+	/* Set page dirty bit to 1. 
+		
+		 TODO: Do we need??? */
 	pagedir_set_dirty (thread_current ()->pagedir, spte->upage, true);
 
 	return true;
@@ -220,7 +216,7 @@ spte_print (struct spt_entry *spte)
 	printf ("(spte_print) upage: %d\n", spte->upage);
 	printf ("(spte_print) TYPE: %d\n", spte->type);
 	printf ("(spte_print) swapped: %d\n", spte->swapped);
-	printf ("(spte_print) swap_index: %d\n", spte->swap_index);
+	printf ("(spte_print) swap_slot: %d\n", spte->swap_slot);
 
 	printf ("(spte_print) writable: %d\n", spte->writable);
 
@@ -257,6 +253,7 @@ page_fault (struct intr_frame *f)
 		 (#PF)". */
 	asm ("movl %%cr2, %0" : "=r" (fault_addr));
 
+
 	/* Turn interrupts back on (they were only off so that we could
 		 be assured of reading CR2 before it changed). */
 	intr_enable ();
@@ -271,26 +268,28 @@ page_fault (struct intr_frame *f)
 	// printf ("\n(page-fault) fault_addr: %d\n", fault_addr);
 #ifdef USERPROG
 	#ifdef VM
+	void *fault_upage = pg_round_down (fault_addr);
 
 	/* Use saved esp state if in kernel mode, else use interrupt
 		 frame esp. */
-  // void *esp = user ? f->esp : thread_current ()->saved_esp;
-	void *esp = f->esp;
+  void *esp = user ? f->esp : thread_current ()->saved_esp;
 
 	/* Terminate if address is above PHYS_BASE or present. */
 	if (not_present && is_user_vaddr (fault_addr))
 	{
 		/* Look up address in supplemental page table. */
-		void *upage = pg_round_down (fault_addr);
 
 		// struct spt_entry *spte = spt_entry_lookup (upage);
 		struct spt_entry spte;
-		spte.upage = upage; 
+		spte.upage = fault_upage; 
 		struct hash_elem *h = hash_find (thread_current ()->spage_table, &spte.elem);
 		
-
 		if (h != NULL)
 		{
+			bool release_vm_lock = false;
+			bool filesys_lock_held = lock_held_by_current_thread (&filesys_lock);
+
+			lock_acquire (&vm_lock);
 			struct spt_entry *spte = hash_entry (h, struct spt_entry, elem);
 
 			if (spte != NULL)
@@ -299,19 +298,43 @@ page_fault (struct intr_frame *f)
 				{
 					case STACK:
 						if (load_page_swap (spte))
-							return;
+							release_vm_lock = true;
+						break;
 					case FILESYSTEM:
 						if (spte->swapped)
+						{
 							if (load_page_swap (spte))
-								return;
-						else	/* Need to synchronise with filesys_lock. */
-							if (load_page	(spte->file, spte->ofs, spte->upage, 
-														spte->bytes, spte->writable))
-								return;
+								release_vm_lock = true;
+						}
+						else
+						{
+							if (!filesys_lock_held)
+								lock_acquire (&filesys_lock);
+
+							if (load_page_filesys	(spte))
+								release_vm_lock = true;
+
+							if (!filesys_lock_held)
+								lock_release (&filesys_lock);
+						}
+						break;
 					case MMAP:
-						if (load_page	(spte->file, spte->ofs, spte->upage, 
-														spte->bytes, spte->writable))
-							return;
+						if (!filesys_lock_held)
+							lock_acquire (&filesys_lock);
+			
+						if (load_page_filesys	(spte))
+							release_vm_lock = true;
+
+						if (!filesys_lock_held)
+							lock_release (&filesys_lock);
+						break;
+				}
+
+
+				if (release_vm_lock)
+				{
+					lock_release (&vm_lock);
+					return;
 				}
 			}
 		}
@@ -326,26 +349,24 @@ page_fault (struct intr_frame *f)
 			//printf ("inside valid stack growth condition\n");
 
 			/* Check stack will not exceed MAX_STACK_SIZE. */
-			if (PHYS_BASE - pg_round_down (fault_addr) <= MAX_STACK_SIZE) 
+			if (PHYS_BASE - fault_upage <= MAX_STACK_SIZE) 
 			{
 				//printf ("Passed max stack size check and is_user_vaddr check\n");
 
-				/* New stack page addres is rounded down fault address
-					 to page boundary. */
-				void *added_stack_page = pg_round_down (fault_addr);
-
 				/* Add new stack page to supplemental page table. */
 				struct spt_entry *spte = 
-					spt_entry_create (added_stack_page, STACK, NULL, 0, 0, true);
+					spt_entry_create (fault_upage, STACK, NULL, 0, 0, true);
 
 				/* Allocate frame for new page. */
-				struct ftable_entry *f = frame_allocate (PAL_USER);
+				void *kpage = frame_allocate (PAL_USER);
 
-				if (f->kpage != NULL)
+				if (kpage != NULL)
 				{
 					/* Install the new stack page. */
-					if (!install_page (spte->upage, f->kpage, spte->writable)) 
+					if (!frame_install_page (spte, kpage)) 
 					{
+						frame_free (kpage);
+						free (spte);
 						/* Install page failed. */
 						PANIC ("install_page unsuccessful");
 					} 
@@ -355,9 +376,6 @@ page_fault (struct intr_frame *f)
 
 						/* Insert new stack page into supplemental page table. */
 						hash_insert (thread_current()->spage_table, &spte->elem);
-
-						/* Install new page into frame. */
-						f->spte = spte;
 
 						return;
 					}

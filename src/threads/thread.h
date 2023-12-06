@@ -106,7 +106,8 @@ struct thread
     #ifdef VM
     /* Owned by vm/frame.c. */
     struct hash *spage_table;           /* Pointer to supplemental page table. */
-    void *saved_esp;                   /* Saved stack pointer. */
+    struct lock spage_table_lock;       /* Lock for supplemental page table. */
+    void *saved_esp;                    /* Saved stack pointer. */
     #endif
 
     /* Owned by thread.c. */

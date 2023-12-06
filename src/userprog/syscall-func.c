@@ -399,11 +399,11 @@ close (int fd)
 
 	/* Remove entry from table. */
 	lock_acquire (&rs->file_table_lock);
-	hash_delete (&rs->file_table, &file_entry->file_elem);
+		hash_delete (&rs->file_table, &file_entry->file_elem);
 	lock_release (&rs->file_table_lock);
 
 	lock_acquire (&filesys_lock);
-	file_close (file_entry->file);
+		file_close (file_entry->file);
 	lock_release (&filesys_lock);
 
 	free (file_entry);
@@ -417,22 +417,33 @@ close (int fd)
 static mapid_t
 mmap (int fd, void *addr)
 {
-
 	struct file_entry *file_entry = file_entry_lookup (fd);
+
+	if (file_entry == NULL || addr == NULL || pg_ofs (addr) != 0)
+	{
+		return ERROR;
+	}
 
 	mapid_t mapping = mmap_create (file_entry, addr);
 
 	return mapping;
 }
 
-
+/* Unmaps the mapping designated by mapping, which must be a mapping ID 
+	 returned by a previous call to mmap by the same process that has not 
+	 yet been unmapped.*/
 static void 
 munmap (mapid_t mapping)
 {
-	mmap_destroy (mapping);
+	struct file_entry *file = file_entry_lookup ((int) mapping);
+
+	if (file == NULL)
+	{
+		return;
+	}
+
+	mmap_destroy (file);
 }
-
-
 
 /* Syscall Helper Functions */
 

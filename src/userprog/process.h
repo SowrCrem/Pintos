@@ -18,8 +18,6 @@ typedef int tid_t;
 /* Number of characters allowed to be processed from command line. */
 #define MAX_CMDLINE_LEN (128)
 
-
-
 /* Represents an entry in the hash table for files held by a process. */
 struct file_entry
 {
