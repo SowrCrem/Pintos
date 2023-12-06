@@ -8,7 +8,7 @@ mmap_create (struct file_entry *file_entry, void *start)
 {
   // printf ("Reached mmap_create \n");
 
-  if (((int) start % PGSIZE) != 0)
+  if (((int) start % PGSIZE) != 0 || start == 0)
       return ERROR;
 
   struct hash *table = thread_current ()->spage_table;
@@ -24,10 +24,6 @@ mmap_create (struct file_entry *file_entry, void *start)
 
   lock_release (&filesys_lock);
 
-  if (start == 0)
-  {
-      return ERROR;
-  }
 
   int ofs = 0;
 

@@ -53,7 +53,7 @@ static void
 init_iterator (void)
 {
   ASSERT (lock_held_by_current_thread (&vm_lock));
-
+  // printf ("(init_iterator) Enters into interator again.\n");
   /* Initialise iterator if not already initialised. */
   static bool is_initialised = false;
   if (!is_initialised)
@@ -69,19 +69,25 @@ static struct ftable_entry *
 get_frame_to_evict (void)
 {
   ASSERT (lock_held_by_current_thread (&vm_lock));
-
+  // printf ("(get_frame_to_evict) Enter into get_frame to evict function.\n");
   /* Find frame where accessed bit is 0. */
   init_iterator ();
-  struct ftable_entry *evictee = NULL;
-  
+  // printf ("(get_frame_to_evict) Passes iterator\n");
+  struct ftable_entry *evictee;
   while (evictee == NULL)
   {
     /* Iterate circularaly through hash table until frame with accessed
        bit set to 0 is found, then return. */
     while (hash_next (&iterator))
     {
+      // printf ("Enters into the loop.\n");
       struct ftable_entry *e = hash_entry (hash_cur (&iterator), 
                                            struct ftable_entry, elem);
+      // printf ("The table entry in loop is: %d\n", e->spte->upage);
+      // printf ("(get_frame_to_evict) The entry value is %d\n", e->kpage);
+
+      // printf ("(get_frame_to_evict) The spte value is %s\n", (e->spte == NULL) ? "NULL" : "NOT NULL");
+
 
       /* If accessed bit is 0, evict frame. */
       if (!pagedir_is_accessed (e->owner->pagedir, e->spte->upage))
@@ -92,9 +98,14 @@ get_frame_to_evict (void)
           // printf ("(get_frame_to_evict) frame %d is pinned\n", e->spte->upage);
           continue;
         } else
-        {          
+        {   
+          // printf ("(get_frame_to_evict) The frame is found.\n") ;     
           evictee = e;
           break;
+        }
+        if (evictee != NULL)
+        {
+          // printf ("(get_frame_to_evict) Should not print anyhting here");
         }
       }
       /* Otherwise, set accessed bit to 0 and continue. */
@@ -102,6 +113,7 @@ get_frame_to_evict (void)
       {
         // printf ("(get_frame_to_evict) accessing frame %d\n", e->spte->upage);
         pagedir_set_accessed (e->owner->pagedir, e->spte->upage, false);
+        // printf ("(get_frame_to_evict) The accessed bit is set to 1\n");
       }
     }
     /* If no frame with accessed bit set to 0 is found,
@@ -111,7 +123,9 @@ get_frame_to_evict (void)
   }
 
   ASSERT (evictee->kpage != NULL);
-
+  if (evictee != NULL) {
+    // printf ("(get_frame_to_evict) Found evictee %d\n", evictee->kpage);
+  }
   return evictee;
 }
 
@@ -123,17 +137,19 @@ evict_frame (void)
   ASSERT (lock_held_by_current_thread (&vm_lock));
 
   /* Get frame that is evictable. */
+  // printf ("(evict_frame) Going to evict frame function.\n");
   struct ftable_entry *frame_to_evict = get_frame_to_evict ();
+  // printf ("(evict_frame) The frame to evict is %d\n", frame_to_evict->kpage);
 
   /* Frame should have valid supplemental page table entry. */
-  ASSERT (frame_to_evict->spte != NULL);
+  // ASSERT (frame_to_evict->spte != NULL);
 
   /* Get page directory and user virtual address of page to evict. */
   uint32_t *pd = frame_to_evict->owner->pagedir;
   void *upage = frame_to_evict->spte->upage;
 
   /* Get kernel virtual address of page to evict. */
-  void* kpage_to_evict = pagedir_get_page (pd, upage);
+  void *kpage_to_evict = pagedir_get_page (pd, upage);
 
   /* Clear page from page directory. */
   pagedir_clear_page (pd, upage);
@@ -155,9 +171,10 @@ evict_frame (void)
     /* Update swap slot in supplemental page table. */
     frame_to_evict->spte->swap_slot = swap_slot;
   }
-  
+  hash_delete (&frame_table, &frame_to_evict->elem);
   /* Remove supplemental page table entry from frame table. */
   frame_to_evict->spte = NULL;
+  // printf ("(evict_frame) removed frame from the table itself");
 
   return kpage_to_evict;  
 }
@@ -177,24 +194,23 @@ frame_allocate (enum palloc_flags flags)
   void *kpage = palloc_get_page (flags);
   if (kpage == NULL)
   {
+    // printf ("The stack is now full.\n");
     /* Perform eviction. */
     bool lock_held = lock_held_by_current_thread (&vm_lock);
     if (!lock_held)
       lock_acquire (&vm_lock);
 
     kpage = evict_frame ();
-
     if (!lock_held)
       lock_release (&vm_lock);
   }
-
+  // if (kpage != NULL) 
+  // {
+  //   printf ("(frame_allocate) The kpage allocated is: %d\n", kpage);
+  // }
   ASSERT (kpage != NULL);
   return kpage;
 }
-
-// get_frame_for_page(struct page *) {
-  
-// }
 
 /* Clears the frame FRAME, if owned by current thread, and removes the
    corresponding entry in frame table. 
@@ -213,6 +229,7 @@ frame_free (void *kpage)
   e_.owner = thread_current ();
   
   struct hash_elem *e = hash_find (&frame_table, &e_.elem);
+  // printf ("(frame_free) the frame to be evicted is found\n.");
   if (e != NULL)
   {
     struct ftable_entry *entry = hash_entry (e, struct ftable_entry, elem);
@@ -254,10 +271,10 @@ frame_install_page (struct spt_entry *spte, void *kpage)
   ASSERT (is_user_vaddr (upage));
   ASSERT (kpage != NULL);
  
-  // ASSERT (pg_ofs (upage) == 0);
-  // ASSERT (pg_ofs (kpage) == 0);
-  // ASSERT (upage != NULL);
-  // ASSERT (kpage != NULL);
+  ASSERT (pg_ofs (upage) == 0);
+  ASSERT (pg_ofs (kpage) == 0);
+  ASSERT (upage != NULL);
+  ASSERT (kpage != NULL);
 
   /* Install page. */
   bool success = install_page (upage, kpage, writable);
@@ -278,6 +295,8 @@ frame_install_page (struct spt_entry *spte, void *kpage)
     e->spte = spte;
     e->pinned = false;
 
+      // printf ("(frame_install_page) The e->kpage value is %d\n", e->kpage);
+
     hash_insert (&frame_table, &e->elem);
 
     if (!lock_held)
@@ -285,6 +304,7 @@ frame_install_page (struct spt_entry *spte, void *kpage)
     
     /* Set accessed bit to 1 (clock page replacement algorithm). */
     pagedir_set_accessed (e->owner->pagedir, upage, true);
+    // printf ("(frame_install_page) The frame is added to the frame table and access bit set to 1.\n");
   }
 
   return success;
