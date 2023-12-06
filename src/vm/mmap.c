@@ -46,8 +46,13 @@ mmap_create (struct file_entry *file_entry, void *start)
 
     /* Checks if mapping would overwrite in a space reserved for the stack. */
     bool space_reserved_for_stack = (upage <= PHYS_BASE - MAX_STACK_SIZE); 
+    if (!space_reserved_for_stack)
+    {
+      return ERROR;
+    }
 
-    if (s_find == NULL || !space_reserved_for_stack)
+
+    if (s_find == NULL )
     {
       struct spt_entry *new = 
         spt_entry_create (upage, MMAP, file, ofs, bytes, true);
