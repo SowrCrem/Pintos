@@ -212,6 +212,7 @@ pagedir_set_accessed (uint32_t *pd, const void *vpage, bool accessed)
           invalidate_pagedir (pd);
         }
     }
+
 }
 
 /* Returns true if the PTE for virtual page VPAGE in PD is writable.

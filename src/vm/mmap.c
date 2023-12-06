@@ -41,14 +41,13 @@ mmap_create (struct file_entry *file_entry, void *start)
     int bytes = (read_bytes >= PGSIZE) ? PGSIZE : read_bytes;
 
     /* Check if virtual page already allocated for the file */
-    struct spt_entry s_find;
-    s_find.upage = upage;
-    struct hash_elem *found = hash_find (table, &s_find.elem);
+    struct spt_entry *s_find = spt_entry_lookup (upage);
+ 
 
     /* Checks if mapping would overwrite in a space reserved for the stack. */
     bool space_reserved_for_stack = (upage >= PHYS_BASE - MAX_STACK_SIZE); 
 
-    if (found == NULL || !space_reserved_for_stack)
+    if (s_find == NULL || !space_reserved_for_stack)
     {
       struct spt_entry *new = 
         spt_entry_create (upage, MMAP, file, ofs, bytes, true);
@@ -89,6 +88,7 @@ mmap_destroy (struct file_entry *f)
   }
   else
     f->mapping = NULL; 
+  
 }
 
 
@@ -131,14 +131,12 @@ uninstall_existing_pages (struct spt_entry *first_page)
     
     /* Update pointers to progress through user virtual memory. */
     upage += PGSIZE;
-
-    struct spt_entry new;
-    new.upage = upage;
-    entry = hash_entry (hash_find (spt, &new.elem), struct spt_entry, elem);
+    entry = spt_entry_lookup (upage);
   }
 
   lock_release (&vm_lock);
 
+  file_close (file_mapped);
   if (!filesys_lock_held)
     lock_release (&filesys_lock);
 }

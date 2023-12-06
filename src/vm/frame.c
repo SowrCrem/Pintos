@@ -83,8 +83,9 @@ get_frame_to_evict (void)
       // printf ("Enters into the loop.\n");
       struct ftable_entry *e = hash_entry (hash_cur (&iterator), 
                                            struct ftable_entry, elem);
-      // printf ("The table entry in loop is: %d\n", e->spte->upage);
-      // printf ("(get_frame_to_evict) The entry value is %d\n", e->kpage);
+      // printf ("The table entry in loop is: %d\n", e->owner->pagedir);
+      // printf ("(get_frame_to_evict) The entry value is %d, and the accessbit is %s.\n", e->kpage,
+      //  (!pagedir_is_accessed(e->owner->pagedir, e->spte->upage)) ? "0" : "1");
 
       // printf ("(get_frame_to_evict) The spte value is %s\n", (e->spte == NULL) ? "NULL" : "NOT NULL");
 
@@ -113,9 +114,12 @@ get_frame_to_evict (void)
       {
         // printf ("(get_frame_to_evict) accessing frame %d\n", e->spte->upage);
         pagedir_set_accessed (e->owner->pagedir, e->spte->upage, false);
+
         // printf ("(get_frame_to_evict) The accessed bit is set to 1\n");
       }
+      // printf ("Does it exit out of this loop?\n");
     }
+    // printf ("(get_frame_to_evict) Need to loop in a circular fashion.\n");
     /* If no frame with accessed bit set to 0 is found,
        restart search at start of frame table, mimicking
        a circular data structure. */
