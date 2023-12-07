@@ -152,11 +152,10 @@ load_page_filesys (struct spt_entry *spte)
 	
 	/* Get new page of memory. */
 	void *kpage = frame_allocate (PAL_USER);
-
+	// printf ("(load_page_filesys) allocated frame and about to install page.\n");
 	/* Add the page to the process's address space. */
 	if (!frame_install_page (spte, kpage))
 	{
-		printf("Does not install page correctly.\n");
 
 		frame_free (kpage);
 		return false;
@@ -194,6 +193,7 @@ load_page_swap (struct spt_entry *spte)
 	/* Set swapped to false and swap slot to default error value. */
 	spte->swapped = false;
 	spte->swap_slot = BITMAP_ERROR;
+
 
 	/* Install the page into the frame. */
 	if (!frame_install_page (spte, kpage))
@@ -372,8 +372,6 @@ page_fault (struct intr_frame *f)
 					} 
 					else 
 					{
-						// printf ("Installed page successfully\n");
-
 						/* Insert new stack page into supplemental page table. */
 						hash_insert (thread_current()->spage_table, &spte->elem);
 

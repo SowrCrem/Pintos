@@ -319,7 +319,7 @@ thread_exit (void)
 
 #ifdef VM
   /* Remove all frames owned by thread. NEED TO FIX FUNCTION. */
-  // frame_remove_all (thread_current ());
+  frame_remove_all (thread_current ());
 #endif
 
   /* Remove thread from all threads list, set our status to dying,

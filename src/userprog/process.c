@@ -877,6 +877,7 @@ setup_stack (void **esp)
 		}
 		else
 		{
+			// printf ("(setup_stack) Being removed from the frame here.");
 			frame_free (kpage);
 			free (spte);
 		}

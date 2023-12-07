@@ -4,6 +4,7 @@
         "stdint.h": "c",
         "process.h": "c",
         "__threading_support": "c",
-        "hash.h": "c"
+        "hash.h": "c",
+        "thread.h": "c"
     }
 }

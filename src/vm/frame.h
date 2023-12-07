@@ -5,6 +5,7 @@
 #include "../lib/stdint.h"
 #include "../lib/debug.h"
 #include "../lib/kernel/hash.h"
+#include "../lib/kernel/list.h"
 #include "../devices/swap.h"
 #include "../userprog/pagedir.h"
 #include "../userprog/process.h"
@@ -29,6 +30,7 @@ struct ftable_entry
   bool pinned;              /* Boolean for if frame is pinned. */
 
   struct hash_elem elem;    /* Hash element for frame table. */
+  struct list_elem eviction_elem; /*Element to evict from to_remove list. */
 };
 
 /* Frame table functions. */
@@ -37,5 +39,6 @@ void *frame_allocate (enum palloc_flags);
 void frame_free (void *);
 bool frame_install_page (struct spt_entry *, void *);
 void frame_uninstall_page (void *upage);
+void frame_remove_all (struct thread*);
 
 #endif /* vm/frame.h */

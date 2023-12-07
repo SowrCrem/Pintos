@@ -5,6 +5,8 @@ static struct hash frame_table;
 
 /* Global frame table iterator. */
 static struct hash_iterator iterator;
+static struct hash_iterator i2;
+struct list to_remove;
 
 /* Global virtual memory lock. */
 struct lock vm_lock;
@@ -83,11 +85,12 @@ get_frame_to_evict (void)
       // printf ("Enters into the loop.\n");
       struct ftable_entry *e = hash_entry (hash_cur (&iterator), 
                                            struct ftable_entry, elem);
-      // printf ("The table entry in loop is: %d\n", e->owner->pagedir);
+      // printf ("The table entry in loop is: %p\n", e->kpage);
+      // printf ("The thread that is running this is %p\n", e->owner->pagedir);
       // printf ("(get_frame_to_evict) The entry value is %d, and the accessbit is %s.\n", e->kpage,
       //  (!pagedir_is_accessed(e->owner->pagedir, e->spte->upage)) ? "0" : "1");
 
-      // printf ("(get_frame_to_evict) The spte value is %s\n", (e->spte == NULL) ? "NULL" : "NOT NULL");
+      // printf ("(get_frame_to_evict) The thread value is %s\n", (e->owner == NULL) ? "NULL" : "NOT NULL");
 
 
       /* If accessed bit is 0, evict frame. */
@@ -104,10 +107,7 @@ get_frame_to_evict (void)
           evictee = e;
           break;
         }
-        if (evictee != NULL)
-        {
-          // printf ("(get_frame_to_evict) Should not print anyhting here");
-        }
+  
       }
       /* Otherwise, set accessed bit to 0 and continue. */
       else
@@ -175,6 +175,7 @@ evict_frame (void)
     /* Update swap slot in supplemental page table. */
     frame_to_evict->spte->swap_slot = swap_slot;
   }
+  // printf ("(evict_frame) Removing from the frame table.\n");
   hash_delete (&frame_table, &frame_to_evict->elem);
   /* Remove supplemental page table entry from frame table. */
   frame_to_evict->spte = NULL;
@@ -312,4 +313,52 @@ frame_install_page (struct spt_entry *spte, void *kpage)
   }
 
   return success;
+}
+
+
+void 
+frame_remove_all (struct thread *thread)
+{
+  list_init (&to_remove);
+  if (!lock_held_by_current_thread(&vm_lock))
+  {
+    lock_acquire (&vm_lock);
+  }
+  // init_iterator ();
+  hash_first (&i2, &frame_table);
+  // printf ("(frame_remove_all) entering into for loop to remove all frames.\n");
+  while (hash_next (&i2))
+  {
+    struct ftable_entry *frame_to_evict = hash_entry (hash_cur (&i2),
+            struct ftable_entry, elem);
+    // printf ("The thread tid value is %d\n", thread->tid);
+    // printf ("the frame to evict value is %d\n", frame_to_evict->owner->tid);
+    // printf ("The frame to evict has spte which is %s\n", (frame_to_evict->spte == NULL) ?
+      // "NULL" : "NOT NULL");
+    if (frame_to_evict->owner->tid == thread->tid)
+    {
+      // printf ("About to delete from hash table.\n");
+      // hash_delete (&frame_table, &e->elem);
+      // printf ("Removed from entry successfully.\n");
+      // // spt_entry_delete (e->spte);
+      // // free (e);
+      list_push_back (&to_remove, &frame_to_evict->eviction_elem);
+      // printf ("Added list to the to remove list.\n");
+
+    }
+  }
+
+  while (!list_empty (&to_remove))
+  {
+    struct list_elem *elem = list_pop_front (&to_remove);
+    struct ftable_entry *f = list_entry (elem, struct ftable_entry, eviction_elem);
+
+    hash_delete (&frame_table, &f->elem);
+  }
+
+  if (lock_held_by_current_thread(&vm_lock))
+  {
+    lock_release (&vm_lock);
+  }
+
 }
