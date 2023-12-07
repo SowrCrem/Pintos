@@ -194,11 +194,12 @@ load_page_swap (struct spt_entry *spte)
 	spte->swapped = false;
 	spte->swap_slot = BITMAP_ERROR;
 
-
 	/* Install the page into the frame. */
 	if (!frame_install_page (spte, kpage))
 	{
+		lock_acquire (&vm_lock);
 		frame_free (kpage);
+		lock_release (&vm_lock);
 		return false;
 	}
 

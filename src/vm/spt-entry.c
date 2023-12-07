@@ -89,9 +89,12 @@ spt_entry_delete (struct spt_entry *spte)
   
   if (!vm_lock_held)
     lock_acquire (&vm_lock);
+
   frame_uninstall_page (spte->upage);
+
   if (!vm_lock_held)
     lock_release (&vm_lock);
+    
   free (spte);
 
 
