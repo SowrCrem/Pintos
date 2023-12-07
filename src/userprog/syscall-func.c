@@ -7,6 +7,7 @@
 #include "process.h"
 #include "../vm/mmap.h"
 
+static void store_result (struct intr_frame *if_, uintptr_t result);
 static void halt (void);
 static void exit (int status);
 static pid_t exec (const char *file);
@@ -22,6 +23,12 @@ static unsigned tell (int fd);
 static void close (int fd);
 static mapid_t mmap (int fd, void *addr);
 static void munmap (mapid_t mapping);
+
+static void
+store_result (struct intr_frame *if_, uintptr_t result)
+{
+	if_->eax = result;
+}
 
 /* Terminates by calling shutdown_power_off(). Seldom used because
 	 you lose information about possible deadlock situations. */
@@ -416,9 +423,7 @@ close (int fd)
 static mapid_t
 mmap (int fd, void *addr)
 {
-
 	struct file_entry *file_entry = file_entry_lookup (fd);
-
 	mapid_t mapping = mmap_create (file_entry, addr);
 
 	return mapping;
@@ -438,160 +443,151 @@ munmap (mapid_t mapping)
 void
 syscall_halt (struct intr_frame *if_ UNUSED)
 {
-	/* Execute halt syscall . */
+	/* Execute halt syscall. */
 	halt ();
 }
 
 void
 syscall_exit (struct intr_frame *if_)
 {
-	/* Retrieve status from if_ or an argv array */
+	/* Retrieve status from if_. */
 	int status = (int) syscall_get_arg (if_, 1);
+
+	/* Execute exit syscall. */
 	exit (status);
 }
 
 void
 syscall_exec (struct intr_frame *if_)
 {
-	/* Retrieve cmd_line from if_ or an argv array */
+	/* Retrieve cmd_line from if_. */
 	char *cmd_line = (char *) syscall_get_arg (if_, 1);
 
-	/* Get result and store it in if_->eax */
-	pid_t result = exec (cmd_line);
-	if_->eax = result;
+	/* Execute exec syscall, get result and store it in if_->eax */
+	store_result (if_, (uintptr_t) exec (cmd_line));
 }
 
 void
 syscall_wait (struct intr_frame *if_)
 {
-	/* Retrieve pid from if_ or an argv array */
+	/* Retrieve pid from if_. */
 	pid_t pid = (pid_t) syscall_get_arg (if_, 1);
 
-	/* Get result and store it in if_->eax */
-	int result = wait (pid);
-	if_->eax = result;
+	/* Execute wait syscall, get result and store it in if_->eax */
+	store_result (if_, (uintptr_t) wait (pid));
 }
 
 void
 syscall_create (struct intr_frame *if_)
 {
-	/* Retrieve file, initial_size from if_ or an argv array */
+	/* Retrieve file, initial_size from if_. */
 	char *file = (char *) syscall_get_arg (if_, 1);
 	unsigned initial_size = (unsigned) syscall_get_arg (if_, 2);
 
-	/* Get result and store it in if_->eax */
-	bool result = (char *) create (file, initial_size);
-	if_->eax = result;
+	/* Execute create syscall, get result and store it in if_->eax */
+	store_result (if_, (uintptr_t) create (file, initial_size));
 }
 
 void
 syscall_remove (struct intr_frame *if_)
 {
-	/* Retrieve file from if_ or an argv array */
+	/* Retrieve file from if_. */
 	char *file = (char *) syscall_get_arg (if_, 1);
 
-	/* Get result and store it in if_->eax */
-	int result = remove (file);
-	if_->eax = result;
+	/* Execute remove syscall, get result and store it in if_->eax */
+	store_result (if_, (uintptr_t) remove (file));
 }
 
 void
 syscall_open (struct intr_frame *if_)
 {
-	/* Retrieve file from if_ or an argv array */
+	/* Retrieve file from if_. */
 	char *file = (char *) syscall_get_arg (if_, 1);
 
-	/* Get result and store it in if_->eax */
-	int result = open (file);
-	if_->eax = result;
+	/* Execute open syscall, get result and store it in if_->eax */
+	store_result (if_, (uintptr_t) open (file));
 }
 
 void
 syscall_filesize (struct intr_frame *if_)
 {
-	/* Retrieve fd from if_ or an argv array */
+	/* Retrieve fd from if_. */
 	int fd = (int) syscall_get_arg (if_, 1);
 
-	/* Get result and store it in if_->eax */
-	int result = filesize (fd);
-	if_->eax = result;
+	/* Execute filesize syscall, get result and store it in if_->eax */
+	store_result (if_, (uintptr_t) filesize (fd));
 }
 
 void
 syscall_read (struct intr_frame *if_)
 {
-	/* Retrieve fd, buffer, size from if_ or an argv array */
+	/* Retrieve fd, buffer, size from if_. */
 	int fd = (int) syscall_get_arg (if_, 1);
 	void *buffer = (void *) syscall_get_arg (if_, 2);
 	unsigned size = (unsigned) syscall_get_arg (if_, 3);
 
-	/* Get result and store it in if_->eax */
-	int result = read (fd, buffer, size);
-	if_->eax = result;
+	/* Execute read syscall, get result and store it in if_->eax */
+	store_result (if_, (uintptr_t) read (fd, buffer, size));
 }
 
 void
 syscall_write (struct intr_frame *if_)
 {
-	/* Retrieve fd, buffer, size from if_ or an argv array */
+	/* Retrieve fd, buffer, size from if_. */
 	int fd = (int) syscall_get_arg (if_, 1);
 	void *buffer = (void *) syscall_get_arg (if_, 2);
 	unsigned size = (unsigned) syscall_get_arg (if_, 3);
 
-	/* Get result and store it in if_->eax */
-	int result = write (fd, buffer, size);
-	if_->eax = result;
+	/* Execute write syscall, get result and store it in if_->eax */
+	store_result (if_, (uintptr_t) write(fd, buffer, size));
 }
 
 void
 syscall_seek (struct intr_frame *if_ UNUSED)
 {
+	/* Retrieve fd, position from if_. */
 	int fd = (int) syscall_get_arg (if_, 1);
 	unsigned position = (unsigned) syscall_get_arg (if_, 2);
 
-	/* Execute seek syscall with arguments. */
+	/* Execute seek syscall. */
 	seek (fd, position);
 }
 
 void
 syscall_tell (struct intr_frame *if_)
 {
-	/* Retrieve fd from if_ or an argv array. */
+	/* Retrieve fd from if_. */
 	int fd = (int) syscall_get_arg (if_, 1);
 
-	/* Get result and store it in if_->eax. */
-	unsigned result = tell (fd);
-	if_->eax = result;
+	/* Execute tell syscall, get result and store it in if_->eax. */
+	store_result (if_, (uintptr_t) tell (fd));
 }
 
 void
 syscall_close (struct intr_frame *if_ UNUSED)
 {
-	/* Retrieve fd from if_ or an argv array. */
+	/* Retrieve fd from if_. */
 	int fd = (int) syscall_get_arg (if_, 1);
 	
 	/* Execute close syscall . */
 	close (fd);
-
-
 }
 
 void
 syscall_mmap (struct intr_frame *if_)
 {
-	/* Retrieve fd, addr from if_ or an argv array. */
+	/* Retrieve fd, addr from if_. */
 	int fd = (int) syscall_get_arg (if_, 1);
 	void *addr = (void *) syscall_get_arg (if_, 2);
 
-	/* Get result and store it in if_->eax. */
-	mapid_t result = mmap (fd, addr);
-	if_->eax = result;
+	/* Execute mmap syscall, get result and store it in if_->eax. */
+	store_result (if_, (uintptr_t) mmap (fd, addr));
 }
 
 void
 syscall_munmap (struct intr_frame *if_)
 {
-	/* Retrieve mapping from if_ or an argv array. */
+	/* Retrieve mapping from if_. */
 	mapid_t mapping = (mapid_t) syscall_get_arg (if_, 1);
 
 	/* Execute munmap syscall . */
