@@ -70,7 +70,7 @@ init_iterator (void)
 static struct ftable_entry *
 get_frame_to_evict (void)
 {
-  // ASSERT (lock_held_by_current_thread (&vm_lock));
+  ASSERT (lock_held_by_current_thread (&vm_lock));
   // printf ("(get_frame_to_evict) Enter into get_frame to evict function.\n");
   /* Find frame where accessed bit is 0. */
   init_iterator ();
@@ -138,7 +138,7 @@ get_frame_to_evict (void)
 static void *
 evict_frame (void)
 {
-  // ASSERT (lock_held_by_current_thread (&vm_lock));
+  ASSERT (lock_held_by_current_thread (&vm_lock));
 
   /* Get frame that is evictable. */
   // printf ("(evict_frame) Going to evict frame function.\n");
@@ -224,7 +224,7 @@ frame_allocate (enum palloc_flags flags)
 void 
 frame_free (void *kpage) 
 {
-  // ASSERT (lock_held_by_current_thread (&vm_lock));
+  ASSERT (lock_held_by_current_thread (&vm_lock));
 
   if (kpage == NULL)
     return;
@@ -253,7 +253,7 @@ frame_free (void *kpage)
 void
 frame_uninstall_page (void *upage)
 {
-  // ASSERT (lock_held_by_current_thread (&vm_lock));
+  ASSERT (lock_held_by_current_thread (&vm_lock));
 
   /* Get kernel virtual address mapping to user virtual address UPAGE. */
   uint32_t *pd = thread_current ()->pagedir;
@@ -286,10 +286,7 @@ frame_install_page (struct spt_entry *spte, void *kpage)
 
   if (success)
   {
-    bool lock_held = lock_held_by_current_thread (&vm_lock);
-    if (!lock_held)
-      lock_acquire (&vm_lock);
-
+    
     /* Add entry to frame table. */
     struct ftable_entry *e = malloc (sizeof (struct ftable_entry));
     if (e == NULL)
@@ -301,6 +298,9 @@ frame_install_page (struct spt_entry *spte, void *kpage)
     e->pinned = false;
 
       // printf ("(frame_install_page) The e->kpage value is %d\n", e->kpage);
+    bool lock_held = lock_held_by_current_thread (&vm_lock);
+    if (!lock_held)
+      lock_acquire (&vm_lock);
 
     hash_insert (&frame_table, &e->elem);
 

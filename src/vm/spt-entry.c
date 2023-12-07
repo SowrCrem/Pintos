@@ -78,31 +78,22 @@ spt_entry_create (void *upage, enum page_type type, struct file *file,
 void
 spt_entry_delete (struct spt_entry *spte)
 {
-  // bool filesys_lock_held = lock_held_by_current_thread (&filesys_lock);
   bool vm_lock_held = lock_held_by_current_thread (&vm_lock);
-
-  // if (!vm_lock_held)
-  //   lock_acquire (&vm_lock);
-
-  // if (!filesys_lock_held)
-  //   lock_acquire (&filesys_lock);
 
   ASSERT (spte != NULL);
   if (spte->type == MMAP && pagedir_is_dirty (thread_current ()->pagedir, spte->upage)) {
+    lock_acquire (&filesys_lock);
     file_write_at (spte->file, spte->upage, spte->bytes, spte->ofs);
+    lock_release (&filesys_lock);
   }
-  // file_write_at (spte)
   
-  // if (!vm_lock_held)
-  //   lock_acquire (&vm_lock);
+  if (!vm_lock_held)
+    lock_acquire (&vm_lock);
   frame_uninstall_page (spte->upage);
-  // if (vm_lock_held)
-  //   lock_release (&vm_lock);
+  if (!vm_lock_held)
+    lock_release (&vm_lock);
   free (spte);
 
-    // if (filesys_lock_held)
-    // lock_release (&filesys_lock);
 
-  // if (vm_lock_held)
-  //   lock_release (&vm_lock);
+
 }
