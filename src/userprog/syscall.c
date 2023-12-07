@@ -4,8 +4,6 @@
 
 static void syscall_handler (struct intr_frame *);
 static intptr_t syscall_execute_function (int32_t syscall_no, struct intr_frame *if_);
-static void store_result (struct intr_frame *if_, int32_t syscall_no, intptr_t result);
-static bool is_void_syscall (int32_t syscall_no, intptr_t result);
 
 /* Look-up table for syscall functions */
 void *system_call_function[] = {
@@ -26,52 +24,42 @@ void *system_call_function[] = {
 		[SYS_MUNMAP]   = syscall_munmap,
 };
 
+/* Initialises system call handler */
 void
 syscall_init (void)
 {
 	intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
 }
 
+/* Executes system calls given state of registers */
 static intptr_t
 syscall_execute_function (int32_t syscall_no, struct intr_frame *if_)
 {
-	void* (*func_pointer) (struct intr_frame *if_) = system_call_function[syscall_no];
+	intptr_t* (*func_pointer) (struct intr_frame *if_) = system_call_function[syscall_no];
 	return func_pointer (if_);
 }
 
-static bool
-is_void_syscall (int32_t syscall_no, intptr_t result)
-{
-	return (syscall_no == SYS_HALT) || (syscall_no == SYS_EXIT) || (result == VOID_SYSCALL_ERROR);
-}
 
-static void
-store_result (struct intr_frame *if_, int32_t syscall_no, intptr_t result)
-{
-	if (!is_void_syscall (syscall_no, result))
-		if_->eax = result;
-}
-
+/* Handles system calls. */
 static void
 syscall_handler (struct intr_frame *if_)
 {
-	/* Verification of user provided pointer happens within get_user_safe(), called by get_syscall_no(). */
+	/* Get syscall number, verification of if_ pointer happens behind the scenes. */
 	int32_t syscall_no = get_syscall_no(if_);
 
-	/* TODO: Remove page-dir check and modify page_fault() in exception.c to catch invalid user pointers. */
-	void *page = pagedir_get_page (thread_current ()->pagedir, if_->frame_pointer);
-
-	if (syscall_no == ERROR || page == NULL) { // TODO: Remove page == NULL check
+	/* Terminate if syscall number is invalid */
+	if (syscall_no == ERROR)
 		terminate_userprog(ERROR);
-		return;
-	}
 
 	/* De-reference frame pointer. */
-	if_->frame_pointer = (void *) (*(uint32_t *) if_->frame_pointer);
+	if_->frame_pointer = (void *) (intptr_t) (*(uint32_t *) if_->frame_pointer);
 
-	/* Execute corresponding syscall function, and store result if not void. */
+	/* Retrieve result by executing corresponding syscall function. */
 	intptr_t result = syscall_execute_function (syscall_no, if_);
-	store_result (if_, syscall_no, result);
+
+	/* Store result if not void. */
+	if ((syscall_no != SYS_HALT) && (syscall_no != SYS_EXIT) && (result != VOID_SYSCALL_ERROR))
+		if_->eax = result;
 }
 
 /* Terminates a user process with given status. */
@@ -83,8 +71,6 @@ terminate_userprog (int status)
 	/* Send exit status to kernel. */
 	cur->rs_manager->exit_status = status;
 	cur->rs_manager->running = false;
-
-	// printf ("%s current tid %d\n", cur->name, cur->tid);
 
 	/* Print termination message. */
 	printf ("%s: exit(%d)\n", cur->name, status);
