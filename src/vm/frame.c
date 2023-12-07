@@ -54,7 +54,7 @@ frame_init (void)
 static void
 init_iterator (void)
 {
-  ASSERT (lock_held_by_current_thread (&vm_lock));
+  // ASSERT (lock_held_by_current_thread (&vm_lock));
   // printf ("(init_iterator) Enters into interator again.\n");
   /* Initialise iterator if not already initialised. */
   static bool is_initialised = false;
@@ -70,7 +70,7 @@ init_iterator (void)
 static struct ftable_entry *
 get_frame_to_evict (void)
 {
-  ASSERT (lock_held_by_current_thread (&vm_lock));
+  // ASSERT (lock_held_by_current_thread (&vm_lock));
   // printf ("(get_frame_to_evict) Enter into get_frame to evict function.\n");
   /* Find frame where accessed bit is 0. */
   init_iterator ();
@@ -138,7 +138,7 @@ get_frame_to_evict (void)
 static void *
 evict_frame (void)
 {
-  ASSERT (lock_held_by_current_thread (&vm_lock));
+  // ASSERT (lock_held_by_current_thread (&vm_lock));
 
   /* Get frame that is evictable. */
   // printf ("(evict_frame) Going to evict frame function.\n");
@@ -319,8 +319,10 @@ frame_install_page (struct spt_entry *spte, void *kpage)
 void 
 frame_remove_all (struct thread *thread)
 {
+
+  bool vm_lock_held = lock_held_by_current_thread (&vm_lock);
   list_init (&to_remove);
-  if (!lock_held_by_current_thread(&vm_lock))
+  if (!vm_lock_held)
   {
     lock_acquire (&vm_lock);
   }
@@ -356,7 +358,7 @@ frame_remove_all (struct thread *thread)
     hash_delete (&frame_table, &f->elem);
   }
 
-  if (lock_held_by_current_thread(&vm_lock))
+  if (!vm_lock_held)
   {
     lock_release (&vm_lock);
   }

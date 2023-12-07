@@ -118,8 +118,8 @@ uninstall_existing_pages (struct spt_entry *first_page)
 
 
 
-  // if (!vm_lock_held)
-  //   lock_acquire (&vm_lock);
+  if (!vm_lock_held)
+    lock_acquire (&vm_lock);
 
   // if (!filesys_lock_held)
   //   lock_acquire (&filesys_lock);
@@ -130,8 +130,17 @@ uninstall_existing_pages (struct spt_entry *first_page)
   while (entry != NULL && entry->file == file_mapped && entry->type == MMAP)
   {
     /* Update changes to file system if page is dirty. */
-    if (pagedir_is_dirty (thread_current ()->pagedir, upage))
-      file_write_at (entry->file, entry->upage, entry->bytes, entry->ofs);
+
+      if (!vm_lock_held)
+        lock_release (&vm_lock);
+
+      lock_acquire (&filesys_lock);
+      if (pagedir_is_dirty (thread_current ()->pagedir, upage))
+        file_write_at (entry->file, entry->upage, entry->bytes, entry->ofs);
+      lock_release (&filesys_lock);
+
+      if (!vm_lock_held)
+        lock_acquire (&vm_lock);
 
     /* Remove page from the supplemental page table. */
     hash_delete (spt, &entry->elem);
@@ -144,12 +153,15 @@ uninstall_existing_pages (struct spt_entry *first_page)
     entry = spt_entry_lookup (upage);
   }
 
+  if (!vm_lock_held)
+    lock_release (&vm_lock);
 
-
+    lock_acquire (&filesys_lock);
   file_close (file_mapped);
-  // if (filesys_lock_held)
-  //   lock_release (&filesys_lock);
+    lock_release (&filesys_lock);
 
-  // if (vm_lock_held)
-  //   lock_release (&vm_lock);
+  if (!vm_lock_held)
+    lock_acquire (&vm_lock);
+  if (!vm_lock_held)
+    lock_release (&vm_lock);
 }
