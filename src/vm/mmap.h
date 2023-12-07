@@ -18,5 +18,7 @@ typedef int mapid_t;
 
 mapid_t mmap_create (struct file_entry *, void *);
 void mmap_destroy (struct file_entry *);
+void uninstall_existing_pages (struct spt_entry *first_page);
+
 
 #endif /* VM_MAP_H */

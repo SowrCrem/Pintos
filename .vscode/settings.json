@@ -5,6 +5,7 @@
         "process.h": "c",
         "__threading_support": "c",
         "hash.h": "c",
-        "thread.h": "c"
+        "thread.h": "c",
+        "spt-entry.h": "c"
     }
 }

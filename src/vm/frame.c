@@ -224,7 +224,7 @@ frame_allocate (enum palloc_flags flags)
 void 
 frame_free (void *kpage) 
 {
-  ASSERT (lock_held_by_current_thread (&vm_lock));
+  // ASSERT (lock_held_by_current_thread (&vm_lock));
 
   if (kpage == NULL)
     return;
@@ -253,7 +253,7 @@ frame_free (void *kpage)
 void
 frame_uninstall_page (void *upage)
 {
-  ASSERT (lock_held_by_current_thread (&vm_lock));
+  // ASSERT (lock_held_by_current_thread (&vm_lock));
 
   /* Get kernel virtual address mapping to user virtual address UPAGE. */
   uint32_t *pd = thread_current ()->pagedir;

@@ -114,10 +114,15 @@ uninstall_existing_pages (struct spt_entry *first_page)
   struct file *file_mapped = entry->file;
 
   bool filesys_lock_held = lock_held_by_current_thread (&filesys_lock);
-  if (!filesys_lock_held)
-    lock_acquire (&filesys_lock);
+  bool vm_lock_held = lock_held_by_current_thread (&vm_lock);
 
-  lock_acquire (&vm_lock);
+
+
+  // if (!vm_lock_held)
+  //   lock_acquire (&vm_lock);
+
+  // if (!filesys_lock_held)
+  //   lock_acquire (&filesys_lock);
 
   /*  Iterate through pages.
       Find supplemental page entry for specific upage.
@@ -139,9 +144,12 @@ uninstall_existing_pages (struct spt_entry *first_page)
     entry = spt_entry_lookup (upage);
   }
 
-  lock_release (&vm_lock);
+
 
   file_close (file_mapped);
-  if (!filesys_lock_held)
-    lock_release (&filesys_lock);
+  // if (filesys_lock_held)
+  //   lock_release (&filesys_lock);
+
+  // if (vm_lock_held)
+  //   lock_release (&vm_lock);
 }
