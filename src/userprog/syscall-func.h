@@ -11,6 +11,9 @@ typedef int mapid_t;
 
 #define PID_ERROR ((pid_t) -1)
 
+/* Void Syscall Error */
+#define VOID_SYSCALL_ERROR (-2)
+
 /* Maximum number of bytes */
 #define MAX_BYTES_PUTBUF (300)
 
@@ -19,20 +22,20 @@ typedef int mapid_t;
 
 
 /* System call helper functions */
-void syscall_halt     (struct intr_frame *if_);
-void syscall_exit     (struct intr_frame *if_);
-void syscall_exec     (struct intr_frame *if_);
-void syscall_wait     (struct intr_frame *if_);
-void syscall_create   (struct intr_frame *if_);
-void syscall_remove   (struct intr_frame *if_);
-void syscall_open     (struct intr_frame *if_);
-void syscall_filesize (struct intr_frame *if_);
-void syscall_read     (struct intr_frame *if_);
-void syscall_write    (struct intr_frame *if_);
-void syscall_seek     (struct intr_frame *if_);
-void syscall_tell     (struct intr_frame *if_);
-void syscall_close    (struct intr_frame *if_);
-void syscall_mmap     (struct intr_frame *if_);
-void syscall_munmap   (struct intr_frame *if_);
+intptr_t syscall_halt     (struct intr_frame *if_);
+intptr_t syscall_exit     (struct intr_frame *if_);
+intptr_t syscall_exec     (struct intr_frame *if_);
+intptr_t syscall_wait     (struct intr_frame *if_);
+intptr_t syscall_create   (struct intr_frame *if_);
+intptr_t syscall_remove   (struct intr_frame *if_);
+intptr_t syscall_open     (struct intr_frame *if_);
+intptr_t syscall_filesize (struct intr_frame *if_);
+intptr_t syscall_read     (struct intr_frame *if_);
+intptr_t syscall_write    (struct intr_frame *if_);
+intptr_t syscall_seek     (struct intr_frame *if_);
+intptr_t syscall_tell     (struct intr_frame *if_);
+intptr_t syscall_close    (struct intr_frame *if_);
+intptr_t syscall_mmap     (struct intr_frame *if_);
+intptr_t syscall_munmap   (struct intr_frame *if_);
 
-#endif /* userprog/syscall-func.h */
+#endif /* SYSCALL_FUNC_H */

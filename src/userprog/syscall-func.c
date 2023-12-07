@@ -78,7 +78,7 @@ exec (const char *cmd_line)
 	{
 		return tid;
 	}
-	else 
+	else
 	{
 		return ERROR;
 	}
@@ -132,9 +132,9 @@ remove (const char *file)
 	return result;
 }
 
-/* Opens the file called file. 
-	
-	 Returns a nonnegative integer handle called a “file descriptor” (fd), 
+/* Opens the file called file.
+
+	 Returns a nonnegative integer handle called a “file descriptor” (fd),
 	 or -1 if the file could not be opened. */
 static int
 open (const char *file_name)
@@ -196,7 +196,7 @@ filesize (int fd)
 	return result;
 }
 
-/* Reads size bytes from the file open as fd into buffer. 
+/* Reads size bytes from the file open as fd into buffer.
 
 	 Returns the number of bytes actually read (0 at end of file), or -1 if the
 	 file could not be read (due to a condition other than end of file). */
@@ -247,9 +247,9 @@ read (int fd, void *buffer, unsigned size)
 	}
 }
 
-/* Writes size bytes from buffer to the open file fd. 
-	
-	 Returns the number of bytes actually written, which may be less 
+/* Writes size bytes from buffer to the open file fd.
+
+	 Returns the number of bytes actually written, which may be less
 	 than size if some bytes could not be written. */
 static int
 write (int fd, const void *buffer, unsigned size)
@@ -270,7 +270,7 @@ write (int fd, const void *buffer, unsigned size)
 		/* Check page is writable if FD is not STDIN or STDOUT. */
 		if (!fd == STDIN_FILENO && !fd == STDOUT_FILENO)
 		{
-			printf ("(write) checking page %d writeable\n", 
+			printf ("(write) checking page %d writeable\n",
 							pg_round_down (buffer + i));
 
 			void *upage = pg_round_down (buffer + i);
@@ -291,13 +291,13 @@ write (int fd, const void *buffer, unsigned size)
 
 		i += chunk_size;
 	}
-	
+
 	if (fd == STDIN_FILENO)
 	{
 		/* Cannot write to standard input; return 0 (number of bytes read). */
 		return ERROR;
 
-	} 
+	}
 	else if (fd == STDOUT_FILENO)
 	{
 		/* Write to standard output. */
@@ -315,7 +315,7 @@ write (int fd, const void *buffer, unsigned size)
 
 		putbuf (buffer, i);
 		return size;
-	} 
+	}
 	else
 	{
 		/* Check FD in file descriptor table. */
@@ -334,7 +334,7 @@ write (int fd, const void *buffer, unsigned size)
 			if (strcmp (entry->file_name, exe_name) == 0)
 			{
 				file_deny_write (entry->file);
-			} else 
+			} else
 			{
 				file_allow_write (entry->file);
 			}
@@ -346,7 +346,7 @@ write (int fd, const void *buffer, unsigned size)
 	}
 }
 
-/* Changes the next byte to be read or written in open file fd to position, 
+/* Changes the next byte to be read or written in open file fd to position,
    expressed in bytes from the beginning of the file.
 
 	 (Thus, a position of 0 is the file’s start.) */
@@ -365,7 +365,7 @@ seek (int fd, unsigned position)
 	lock_release (&filesys_lock);
 }
 
-/* Returns the position of the next byte to be read or written in open file 
+/* Returns the position of the next byte to be read or written in open file
 	 fd, expressed in bytes from the beginning of the file. */
 static unsigned
 tell (int fd)
@@ -409,7 +409,7 @@ close (int fd)
 	free (file_entry);
 }
 
-/* Maps the file open as fd into the process's virtual address space. 
+/* Maps the file open as fd into the process's virtual address space.
 	 The entire file is mapped into consecutive virtual pages starting at addr.
 
 	 Returns a mapping id that uniquely identifies the mapping within the process.
@@ -429,10 +429,10 @@ mmap (int fd, void *addr)
 	return mapping;
 }
 
-/* Unmaps the mapping designated by mapping, which must be a mapping ID 
-	 returned by a previous call to mmap by the same process that has not 
+/* Unmaps the mapping designated by mapping, which must be a mapping ID
+	 returned by a previous call to mmap by the same process that has not
 	 yet been unmapped.*/
-static void 
+static void
 munmap (mapid_t mapping)
 {
 	struct file_entry *file = file_entry_lookup ((int) mapping);
@@ -447,165 +447,167 @@ munmap (mapid_t mapping)
 
 /* Syscall Helper Functions */
 
-void
+intptr_t
 syscall_halt (struct intr_frame *if_ UNUSED)
 {
-	/* Execute halt syscall . */
+	/* Execute halt syscall. */
 	halt ();
 }
 
-void
+intptr_t
 syscall_exit (struct intr_frame *if_)
 {
-	/* Retrieve status from if_ or an argv array */
+	/* Retrieve status from if_. */
 	int status = (int) syscall_get_arg (if_, 1);
+
+	/* Execute exit syscall. */
 	exit (status);
 }
 
-void
+intptr_t
 syscall_exec (struct intr_frame *if_)
 {
-	/* Retrieve cmd_line from if_ or an argv array */
+	/* Retrieve cmd_line from if_. */
 	char *cmd_line = (char *) syscall_get_arg (if_, 1);
 
-	/* Get result and store it in if_->eax */
-	pid_t result = exec (cmd_line);
-	if_->eax = result;
+	/* Execute exec syscall and return result. */
+	return (intptr_t) exec (cmd_line);
 }
 
-void
+intptr_t
 syscall_wait (struct intr_frame *if_)
 {
-	/* Retrieve pid from if_ or an argv array */
+	/* Retrieve pid from if_. */
 	pid_t pid = (pid_t) syscall_get_arg (if_, 1);
 
-	/* Get result and store it in if_->eax */
+	/* Execute wait syscall and return result. */
 	int result = wait (pid);
-	if_->eax = result;
+	intptr_t result_ptr = (intptr_t) result;
+	return result_ptr;
 }
 
-void
+intptr_t
 syscall_create (struct intr_frame *if_)
 {
-	/* Retrieve file, initial_size from if_ or an argv array */
+	/* Retrieve file, initial_size from if_. */
 	char *file = (char *) syscall_get_arg (if_, 1);
 	unsigned initial_size = (unsigned) syscall_get_arg (if_, 2);
 
-	/* Get result and store it in if_->eax */
-	bool result = (char *) create (file, initial_size);
-	if_->eax = result;
+	/* Execute create syscall, get result and store it in if_->eax */
+	return (intptr_t) create (file, initial_size);
 }
 
-void
+intptr_t
 syscall_remove (struct intr_frame *if_)
 {
-	/* Retrieve file from if_ or an argv array */
+	/* Retrieve file from if_. */
 	char *file = (char *) syscall_get_arg (if_, 1);
 
-	/* Get result and store it in if_->eax */
-	int result = remove (file);
-	if_->eax = result;
+	/* Execute remove syscall and return result. */
+	return (intptr_t) remove (file);
 }
 
-void
+intptr_t
 syscall_open (struct intr_frame *if_)
 {
-	/* Retrieve file from if_ or an argv array */
+	/* Retrieve file from if_. */
 	char *file = (char *) syscall_get_arg (if_, 1);
 
-	/* Get result and store it in if_->eax */
-	int result = open (file);
-	if_->eax = result;
+	/* Execute open syscall and return result. */
+	return (intptr_t) open (file);
 }
 
-void
+intptr_t
 syscall_filesize (struct intr_frame *if_)
 {
-	/* Retrieve fd from if_ or an argv array */
+	/* Retrieve fd from if_. */
 	int fd = (int) syscall_get_arg (if_, 1);
 
-	/* Get result and store it in if_->eax */
-	int result = filesize (fd);
-	if_->eax = result;
+	/* Execute filesize syscall and return result. */
+	return (intptr_t) filesize (fd);
 }
 
-void
+intptr_t
 syscall_read (struct intr_frame *if_)
 {
-	/* Retrieve fd, buffer, size from if_ or an argv array */
+	/* Retrieve fd, buffer, size from if_. */
 	int fd = (int) syscall_get_arg (if_, 1);
 	void *buffer = (void *) syscall_get_arg (if_, 2);
 	unsigned size = (unsigned) syscall_get_arg (if_, 3);
 
-	/* Get result and store it in if_->eax */
-	int result = read (fd, buffer, size);
-	if_->eax = result;
+	/* Execute read syscall and return result. */
+	return (intptr_t) read (fd, buffer, size);
 }
 
-void
+intptr_t
 syscall_write (struct intr_frame *if_)
 {
-	/* Retrieve fd, buffer, size from if_ or an argv array */
+	/* Retrieve fd, buffer, size from if_. */
 	int fd = (int) syscall_get_arg (if_, 1);
 	void *buffer = (void *) syscall_get_arg (if_, 2);
 	unsigned size = (unsigned) syscall_get_arg (if_, 3);
 
-	/* Get result and store it in if_->eax */
-	int result = write (fd, buffer, size);
-	if_->eax = result;
+	/* Execute write syscall and return result. */
+	return (intptr_t) write(fd, buffer, size);
 }
 
-void
+intptr_t
 syscall_seek (struct intr_frame *if_ UNUSED)
 {
+	/* Retrieve fd, position from if_. */
 	int fd = (int) syscall_get_arg (if_, 1);
 	unsigned position = (unsigned) syscall_get_arg (if_, 2);
 
-	/* Execute seek syscall with arguments. */
+	/* Execute seek syscall. */
 	seek (fd, position);
+
+	/* Return error since seek() is void */
+	return VOID_SYSCALL_ERROR;
 }
 
-void
+intptr_t
 syscall_tell (struct intr_frame *if_)
 {
-	/* Retrieve fd from if_ or an argv array. */
+	/* Retrieve fd from if_. */
 	int fd = (int) syscall_get_arg (if_, 1);
 
-	/* Get result and store it in if_->eax. */
-	unsigned result = tell (fd);
-	if_->eax = result;
+	/* Execute tell syscall and return result. */
+	return (intptr_t) tell (fd);
 }
 
-void
+intptr_t
 syscall_close (struct intr_frame *if_ UNUSED)
 {
-	/* Retrieve fd from if_ or an argv array. */
+	/* Retrieve fd from if_. */
 	int fd = (int) syscall_get_arg (if_, 1);
-	
-	/* Execute close syscall . */
+
+	/* Execute close syscall. */
 	close (fd);
 
-
+	/* Return error since close() is void */
+	return VOID_SYSCALL_ERROR;
 }
 
-void
+intptr_t
 syscall_mmap (struct intr_frame *if_)
 {
-	/* Retrieve fd, addr from if_ or an argv array. */
+	/* Retrieve fd, addr from if_. */
 	int fd = (int) syscall_get_arg (if_, 1);
 	void *addr = (void *) syscall_get_arg (if_, 2);
 
-	/* Get result and store it in if_->eax. */
-	mapid_t result = mmap (fd, addr);
-	if_->eax = result;
+	/* Execute mmap syscall and return result. */
+	return (intptr_t) mmap (fd, addr);
 }
 
-void
+intptr_t
 syscall_munmap (struct intr_frame *if_)
 {
-	/* Retrieve mapping from if_ or an argv array. */
+	/* Retrieve mapping from if_. */
 	mapid_t mapping = (mapid_t) syscall_get_arg (if_, 1);
 
-	/* Execute munmap syscall . */
+	/* Execute munmap syscall. */
 	munmap (mapping);
+
+	/* Return error since munmap() is void */
+	return VOID_SYSCALL_ERROR;
 }

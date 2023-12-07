@@ -3,7 +3,9 @@
 #include "../userprog/memory-access.h"
 
 static void syscall_handler (struct intr_frame *);
-static void syscall_execute_function (int32_t syscall_no, struct intr_frame *if_);
+static intptr_t syscall_execute_function (int32_t syscall_no, struct intr_frame *if_);
+static void store_result (struct intr_frame *if_, int32_t syscall_no, intptr_t result);
+static bool is_void_syscall (int32_t syscall_no, intptr_t result);
 
 /* Look-up table for syscall functions */
 void *system_call_function[] = {
@@ -30,11 +32,24 @@ syscall_init (void)
 	intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
 }
 
-static void
+static intptr_t
 syscall_execute_function (int32_t syscall_no, struct intr_frame *if_)
 {
 	void* (*func_pointer) (struct intr_frame *if_) = system_call_function[syscall_no];
-	func_pointer (if_);
+	return func_pointer (if_);
+}
+
+static bool
+is_void_syscall (int32_t syscall_no, intptr_t result)
+{
+	return (syscall_no == SYS_HALT) || (syscall_no == SYS_EXIT) || (result == VOID_SYSCALL_ERROR);
+}
+
+static void
+store_result (struct intr_frame *if_, int32_t syscall_no, intptr_t result)
+{
+	if (!is_void_syscall (syscall_no, result))
+		if_->eax = result;
 }
 
 static void
@@ -42,25 +57,21 @@ syscall_handler (struct intr_frame *if_)
 {
 	/* Verification of user provided pointer happens within get_user_safe(), called by get_syscall_no(). */
 	int32_t syscall_no = get_syscall_no(if_);
-	/* Remove page-dir check and modify page_fault() in exception.c to catch invalid user pointers. */
+
+	/* TODO: Remove page-dir check and modify page_fault() in exception.c to catch invalid user pointers. */
 	void *page = pagedir_get_page (thread_current ()->pagedir, if_->frame_pointer);
 
-	if (syscall_no != ERROR && page != NULL)
-	{
-		/* De-reference frame pointer. */
-		if_->frame_pointer = (void *) (*(uint32_t *) if_->frame_pointer);
-
-		/* Save stack pointer onto thread, in case of stack growth. */
-		thread_current ()->saved_esp = if_->esp;
-
-		/* Execute corresponding syscall function. */
-		syscall_execute_function (syscall_no, if_);
+	if (syscall_no == ERROR || page == NULL) { // TODO: Remove page == NULL check
+		terminate_userprog(ERROR);
+		return;
 	}
-	else
-	{
-		/* Terminate user process with ERROR code. */
-		terminate_userprog (ERROR);
-	}
+
+	/* De-reference frame pointer. */
+	if_->frame_pointer = (void *) (*(uint32_t *) if_->frame_pointer);
+
+	/* Execute corresponding syscall function, and store result if not void. */
+	intptr_t result = syscall_execute_function (syscall_no, if_);
+	store_result (if_, syscall_no, result);
 }
 
 /* Terminates a user process with given status. */
