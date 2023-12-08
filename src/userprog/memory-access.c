@@ -51,7 +51,6 @@ int32_t
 get_user_word_safe (const uint8_t *uaddr)
 {
 	int32_t word = 0;
-	int size = sizeof (typeof (*uaddr));
 	for (int i = 0; i < WORD_SIZE; i ++)
 	{
 		int byte = get_user_safe (uaddr + i);

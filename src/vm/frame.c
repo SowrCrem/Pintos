@@ -34,16 +34,6 @@ frame_less (const struct hash_elem *a, const struct hash_elem *b,
   return frame_hash (a, NULL) < frame_hash (b, NULL);
 }
 
-/* Frame table destroy function. 
-
-   Not necessary as frame table is global. */
-static void
-frame_destroy_func (struct hash_elem *e, void *aux UNUSED)
-{
-  struct ftable_entry *entry = hash_entry (e, struct ftable_entry, elem);
-  free (entry);
-}
-
 /* Initialises the frame table. */
 void 
 frame_init (void) 
@@ -76,7 +66,7 @@ get_frame_to_evict (void)
   /* Find frame where accessed bit is 0. */
 
   init_iterator ();
-  struct ftable_entry *evictee;
+  struct ftable_entry *evictee = NULL;
   while (evictee == NULL)
   {
     /* Iterate circularaly through hash table until frame with accessed
@@ -89,22 +79,13 @@ get_frame_to_evict (void)
       /* If accessed bit is 0, evict frame. */
       if (!pagedir_is_accessed (e->owner->pagedir, e->spte->upage))
       {
-        /* Cannot evict pinned frames. */
-        if (e->pinned)
-        {
-          continue;
-        } else
-        {   
-          evictee = e;
-          break;
-        }
-  
+        evictee = e;
+        break;
       }
       /* Otherwise, set accessed bit to 0 and continue. */
       else
       {
         pagedir_set_accessed (e->owner->pagedir, e->spte->upage, false);
-
       }
     }
     /* If no frame with accessed bit set to 0 is found,
@@ -278,7 +259,6 @@ frame_install_page (struct spt_entry *spte, void *kpage)
     e->owner = thread_current ();
     e->kpage = kpage;
     e->spte = spte;
-    e->pinned = false;
 
     lock_release (&filesys_lock);
     bool lock_held = lock_held_by_current_thread (&vm_lock);

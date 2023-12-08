@@ -26,7 +26,7 @@ mmap_create (struct file_entry *file_entry, void *start)
 
   /* Initialise start virtual address. */
   void *upage = pg_round_down (start);
-  struct spte_entry *first_page = NULL;
+  struct spt_entry *first_page = NULL;
 
   /* Check address is page aligned - if not return error. */
   while (read_bytes > 0)
@@ -48,10 +48,9 @@ mmap_create (struct file_entry *file_entry, void *start)
     }
 
 
-    if (s_find == NULL )
+    if (s_find == NULL)
     {
-      struct spt_entry *new = 
-        spt_entry_create (upage, MMAP, file, ofs, bytes, true);
+      struct spt_entry *new = spt_entry_create (upage, MMAP, file, ofs, bytes, true);
 
       if (first_page == NULL)
         first_page = new;
@@ -61,9 +60,9 @@ mmap_create (struct file_entry *file_entry, void *start)
     } 
     else
     {
-        /* Uninstall any existing pages. */
-        uninstall_existing_pages (first_page);
-        return ERROR;
+      /* Uninstall any existing pages. */
+      uninstall_existing_pages (first_page);
+      return ERROR;
     }
 
     /* Update temporary variables to progress through user virtual memory. */

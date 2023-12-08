@@ -27,7 +27,6 @@ struct ftable_entry
   void *kpage;              /* Corresponding kernel virtual address pointer. */
 
   struct spt_entry *spte;   /* Page stored in the frame. */
-  bool pinned;              /* Boolean for if frame is pinned. */
 
   struct hash_elem elem;    /* Hash element for frame table. */
   struct list_elem eviction_elem; /*Element to evict from to_remove list. */

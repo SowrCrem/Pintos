@@ -137,7 +137,6 @@ load_page_filesys (struct spt_entry *spte)
 	struct file *file = spte->file;
 	off_t ofs = spte->ofs;
 	size_t read_bytes = spte->bytes;
-	bool writable = spte->writable;
 	void *upage = spte->upage;
 
 	ASSERT (pg_ofs (upage) == 0);
@@ -155,7 +154,6 @@ load_page_filesys (struct spt_entry *spte)
 	/* Add the page to the process's address space. */
 	if (!frame_install_page (spte, kpage))
 	{
-
 		frame_free (kpage);
 		return false;
 	}
@@ -217,21 +215,6 @@ load_page_swap (struct spt_entry *spte)
 	pagedir_set_dirty (thread_current ()->pagedir, spte->upage, true);
 
 	return true;
-}
-
-static void
-spte_print (struct spt_entry *spte)
-{
-	printf ("(spte_print) upage: %d\n", spte->upage);
-	printf ("(spte_print) TYPE: %d\n", spte->type);
-	printf ("(spte_print) swapped: %d\n", spte->swapped);
-	printf ("(spte_print) swap_slot: %d\n", spte->swap_slot);
-
-	printf ("(spte_print) writable: %d\n", spte->writable);
-
-	printf ("(spte_print) file: %d\n", spte->file);
-	printf ("(spte_print) offset: %d\n", spte->ofs);
-	printf ("(spte_print) read bytes: %d\n\n", spte->bytes);
 }
 
 /* Page fault handler.  This is a skeleton that must be filled in

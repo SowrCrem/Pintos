@@ -35,8 +35,7 @@ spt_entry_destroy_func (struct hash_elem *e_, void *aux UNUSED)
 struct spt_entry *
 spt_entry_lookup (const void *upage)
 {
-	struct spt_entry spte;
-	spte.upage = upage;
+	struct spt_entry spte = { .upage = pg_round_down (upage) };
 
 	struct hash_elem *e;
 	e = hash_find (thread_current ()->spage_table, &spte.elem);

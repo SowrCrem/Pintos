@@ -273,12 +273,11 @@ write (int fd, const void *buffer, unsigned size)
 			terminate_userprog (ERROR);
 		}
 
-
 		/* Check page is writable if FD is not STDIN or STDOUT. */
-		if (!fd == STDIN_FILENO && !fd == STDOUT_FILENO)
+		if (!(fd == STDIN_FILENO) && !(fd == STDOUT_FILENO))
 		{
-			printf ("(write) checking page %d writeable\n", 
-							pg_round_down (buffer + i));
+			// printf ("(write) checking page %d writeable\n", 
+			// 				pg_round_down (buffer + i));
 
 			void *upage = pg_round_down (buffer + i);
 			struct spt_entry *spte = spt_entry_lookup (upage);
@@ -291,7 +290,7 @@ write (int fd, const void *buffer, unsigned size)
 
 			if (spte != NULL && !spte->writable)
 			{
-				printf ("(write) ERROR: page %d not writable\n", upage);
+				// printf ("(write) ERROR: page %d not writable\n", upage);
 				terminate_userprog (ERROR);
 			}
 		}
