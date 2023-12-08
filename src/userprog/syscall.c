@@ -73,8 +73,6 @@ terminate_userprog (int status)
 	cur->rs_manager->exit_status = status;
 	cur->rs_manager->running = false;
 
-	// printf ("%s current tid %d\n", cur->name, cur->tid);
-
 	/* Print termination message. */
 	printf ("%s: exit(%d)\n", cur->name, status);
 

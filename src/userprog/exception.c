@@ -209,9 +209,7 @@ load_page_swap (struct spt_entry *spte)
 	}
 	lock_release (&filesys_lock);
 
-	/* Set page dirty bit to 1. 
-		
-		 TODO: Do we need??? */
+	/* Set page dirty bit to 1. */
 	pagedir_set_dirty (thread_current ()->pagedir, spte->upage, true);
 
 	return true;
