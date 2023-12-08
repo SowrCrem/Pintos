@@ -105,11 +105,22 @@ file_table_less (const struct hash_elem *a, const struct hash_elem *b,
 static void
 file_table_destroy_func (struct hash_elem *e_, void *aux UNUSED)
 {
-  ASSERT (lock_held_by_current_thread (&filesys_lock));
   
   struct file_entry *e = hash_entry (e_, struct file_entry, file_elem);
+  
+  struct lock *fd_lock = &thread_current ()->rs_manager->file_table_lock;
+//   bool fd_lock_held = lock_held_by_current_thread (fd_lock);
+  bool filesys_lock_held = lock_held_by_current_thread (&filesys_lock);
 
+//   if (fd_lock_held)
+// 	lock_release (fd_lock);
+  if (!filesys_lock_held)
+  	lock_acquire (&filesys_lock);
   file_close (e->file);
+  if (!filesys_lock_held)
+  	lock_release (&filesys_lock);
+//   if (fd_lock_held)
+// 	lock_acquire (fd_lock);
   free (e);
 }
 
@@ -258,19 +269,25 @@ process_resource_free (struct thread *t)
 
 	/* Free the file descriptor table and close executable file. */
 	bool filesys_lock_held = lock_held_by_current_thread (&filesys_lock);
-	
-	if (!filesys_lock_held)
-		lock_acquire (&filesys_lock);
-
 	bool fd_lock_held = lock_held_by_current_thread (&rs->file_table_lock);
 
-	if (!fd_lock_held)
-		lock_acquire (&rs->file_table_lock);
+	
+	// if (!filesys_lock_held)
+	// 	lock_acquire (&filesys_lock);
 
-		hash_destroy (&rs->file_table, &file_table_destroy_func);
 
-	if (!fd_lock_held)
-		lock_release (&rs->file_table_lock);
+	// if (!filesys_lock_held)
+	// 	lock_release (&filesys_lock);
+
+	// if (!fd_lock_held)
+	// 	lock_acquire (&rs->file_table_lock);
+
+	hash_destroy (&rs->file_table, &file_table_destroy_func);
+
+	// if (!fd_lock_held)
+	// 	lock_release (&rs->file_table_lock);
+	if (!filesys_lock_held)
+		lock_acquire (&filesys_lock);
 
 	if (!filesys_lock_held)
 		lock_release (&filesys_lock);
@@ -779,6 +796,7 @@ lazy_load_segment (struct file *file, off_t ofs, uint8_t *upage,
 	ASSERT ((read_bytes + zero_bytes) % PGSIZE == 0);
 	ASSERT (pg_ofs (upage) == 0);
 	ASSERT (ofs % PGSIZE == 0);
+	ASSERT (lock_held_by_current_thread (&filesys_lock));
 
 	file_seek (file, ofs);
 	/* Lazy load the pages. */
@@ -796,9 +814,7 @@ lazy_load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		/* Check if upage pointer already in supplemental page table. */
 		struct spt_entry s_find;
 		s_find.upage = pg_round_down ((void *) upage);
-		struct hash_elem *found = hash_find (t->spage_table, &s_find.elem);
-		// struct spt_entry *spte = spt_entry_lookup (pg_round_down (upage));
-		
+		struct hash_elem *found = hash_find (t->spage_table, &s_find.elem);		
 
 		/* Insert new page entry into supplemental page table, if found is NULL. */
 		if (found == NULL)
@@ -814,10 +830,8 @@ lazy_load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		else	/* If already in supplemental page table. */
 		{
 			struct spt_entry *spte = spt_entry_lookup (pg_round_down (upage));
-			// printf ("(lazy_load_segment) trying to replace %d\n", upage);
 
 			/* Check if writable flag for the page should be updated. */
-
 			if (writable && !spte->writable) 
 			{
 				spte->writable = writable;
@@ -827,14 +841,6 @@ lazy_load_segment (struct file *file, off_t ofs, uint8_t *upage,
 			spte->bytes = page_read_bytes;
 
 			hash_replace (t->spage_table, &spte->elem);
-
-			// if (h != &spte->elem)
-			// 	printf ("(lazy_load_segment) page %d writable flag updated\n", upage);
-			// else
-			// 	printf ("(lazy_load_segment) page %d writable flag update failed\n", upage);	
-
-			/* Accounting for offset being incremented by PGSIZE twice for one page. */
-			// ofs -= PGSIZE;
 		}
 
 		/* Advance. */
@@ -851,6 +857,7 @@ lazy_load_segment (struct file *file, off_t ofs, uint8_t *upage,
 static bool
 setup_stack (void **esp)
 {
+	ASSERT (lock_held_by_current_thread (&filesys_lock));
 	/* Allocate and install initial stack page at load time */
 	uint8_t *initial_stack_upage = ((uint8_t *) PHYS_BASE) - PGSIZE;
 	struct spt_entry *spte = 
@@ -877,8 +884,9 @@ setup_stack (void **esp)
 		}
 		else
 		{
-			// printf ("(setup_stack) Being removed from the frame here.");
+			lock_release (&filesys_lock);
 			frame_free (kpage);
+			lock_acquire (&filesys_lock);
 			free (spte);
 		}
 	}

@@ -152,7 +152,6 @@ load_page_filesys (struct spt_entry *spte)
 	
 	/* Get new page of memory. */
 	void *kpage = frame_allocate (PAL_USER);
-	// printf ("(load_page_filesys) allocated frame and about to install page.\n");
 	/* Add the page to the process's address space. */
 	if (!frame_install_page (spte, kpage))
 	{
@@ -181,11 +180,16 @@ static bool
 load_page_swap (struct spt_entry *spte)
 {
 	ASSERT (lock_held_by_current_thread (&vm_lock));
+	ASSERT (!lock_held_by_current_thread (&filesys_lock));
 
 	ASSERT (spte->swapped);
 
 	/* Get new page of memory. */
+	lock_release (&vm_lock);
+	lock_acquire (&filesys_lock);
 	void* kpage = frame_allocate (PAL_USER | PAL_ZERO);
+	lock_release (&filesys_lock);
+	lock_acquire (&vm_lock);
 
 	/* Load data into the page. */
 	swap_in (kpage, spte->swap_slot);
@@ -195,13 +199,17 @@ load_page_swap (struct spt_entry *spte)
 	spte->swap_slot = BITMAP_ERROR;
 
 	/* Install the page into the frame. */
+	lock_acquire (&filesys_lock);
 	if (!frame_install_page (spte, kpage))
 	{
+		lock_release (&filesys_lock);
 		lock_acquire (&vm_lock);
 		frame_free (kpage);
 		lock_release (&vm_lock);
+		lock_acquire(&filesys_lock);
 		return false;
 	}
+	lock_release (&filesys_lock);
 
 	/* Set page dirty bit to 1. 
 		
@@ -359,20 +367,34 @@ page_fault (struct intr_frame *f)
 					spt_entry_create (fault_upage, STACK, NULL, 0, 0, true);
 
 				/* Allocate frame for new page. */
+				bool filesys_lock_held = lock_held_by_current_thread (&filesys_lock);
+				bool vm_lock_held = lock_held_by_current_thread (&vm_lock);
+				if (!filesys_lock_held)
+					lock_acquire (&filesys_lock);
 				void *kpage = frame_allocate (PAL_USER);
+
+				
 
 				if (kpage != NULL)
 				{
 					/* Install the new stack page. */
 					if (!frame_install_page (spte, kpage)) 
 					{
+						if (!filesys_lock_held)
+							lock_release (&filesys_lock);
+						if (!vm_lock_held)
+							lock_acquire (&vm_lock);
 						frame_free (kpage);
+						if (!vm_lock_held)
+							lock_release (&vm_lock);
 						free (spte);
 						/* Install page failed. */
 						PANIC ("install_page unsuccessful");
 					} 
 					else 
 					{
+						if (!filesys_lock_held)
+							lock_release (&filesys_lock);
 						/* Insert new stack page into supplemental page table. */
 						hash_insert (thread_current()->spage_table, &spte->elem);
 

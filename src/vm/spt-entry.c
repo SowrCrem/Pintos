@@ -79,13 +79,21 @@ void
 spt_entry_delete (struct spt_entry *spte)
 {
   bool vm_lock_held = lock_held_by_current_thread (&vm_lock);
-
+  bool filesys_lock_held = lock_held_by_current_thread (&filesys_lock);
   ASSERT (spte != NULL);
-  if (spte->type == MMAP && pagedir_is_dirty (thread_current ()->pagedir, spte->upage)) {
+
+  if (!filesys_lock_held)
     lock_acquire (&filesys_lock);
+
+  /* Update changes to file system if page is dirty. */
+  if (spte->type == MMAP && pagedir_is_dirty (thread_current ()->pagedir, spte->upage)) 
+  {
     file_write_at (spte->file, spte->upage, spte->bytes, spte->ofs);
-    lock_release (&filesys_lock);
   }
+
+  if (!filesys_lock_held)
+    lock_release (&filesys_lock);
+
   
   if (!vm_lock_held)
     lock_acquire (&vm_lock);

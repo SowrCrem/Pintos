@@ -6,8 +6,6 @@ void uninstall_existing_pages (struct spt_entry *first_page);
 mapid_t 
 mmap_create (struct file_entry *file_entry, void *start)
 {
-  // printf ("Reached mmap_create \n");
-
   if (((int) start % PGSIZE) != 0 || start == 0)
       return ERROR;
 
@@ -18,7 +16,6 @@ mmap_create (struct file_entry *file_entry, void *start)
   /* Obtain a separate and independent reference to the file for each of its mappings. */
   lock_acquire (&filesys_lock);
 
-      // printf ("About to open file.\n");
       struct file *file = file_reopen (file_entry->file);
       int read_bytes = (int) file_length (file);
 
@@ -101,6 +98,7 @@ mmap_destroy (struct file_entry *f)
 void 
 uninstall_existing_pages (struct spt_entry *first_page) 
 {
+  ASSERT (!lock_held_by_current_thread (&filesys_lock));
   /* If mapping is null, no need to destroy any pages. */
   if (first_page == NULL)
     return;
@@ -113,30 +111,27 @@ uninstall_existing_pages (struct spt_entry *first_page)
   struct spt_entry *entry = first_page;
   struct file *file_mapped = entry->file;
 
-  bool filesys_lock_held = lock_held_by_current_thread (&filesys_lock);
   bool vm_lock_held = lock_held_by_current_thread (&vm_lock);
-
 
 
   if (!vm_lock_held)
     lock_acquire (&vm_lock);
-
-  // if (!filesys_lock_held)
-  //   lock_acquire (&filesys_lock);
 
   /*  Iterate through pages.
       Find supplemental page entry for specific upage.
       Free the supplemental page entry. */
   while (entry != NULL && entry->file == file_mapped && entry->type == MMAP)
   {
-    /* Update changes to file system if page is dirty. */
 
       if (!vm_lock_held)
         lock_release (&vm_lock);
 
       lock_acquire (&filesys_lock);
+      
+      /* Update changes to file system if page is dirty. */
       if (pagedir_is_dirty (thread_current ()->pagedir, upage))
         file_write_at (entry->file, entry->upage, entry->bytes, entry->ofs);
+        
       lock_release (&filesys_lock);
 
       if (!vm_lock_held)
@@ -146,6 +141,7 @@ uninstall_existing_pages (struct spt_entry *first_page)
     hash_delete (spt, &entry->elem);
     
     /* Remove page from frame table. */
+
     spt_entry_delete (entry);
     
     /* Update pointers to progress through user virtual memory. */
@@ -156,9 +152,9 @@ uninstall_existing_pages (struct spt_entry *first_page)
   if (!vm_lock_held)
     lock_release (&vm_lock);
 
-    lock_acquire (&filesys_lock);
+  lock_acquire (&filesys_lock);
   file_close (file_mapped);
-    lock_release (&filesys_lock);
+  lock_release (&filesys_lock);
 
   if (!vm_lock_held)
     lock_acquire (&vm_lock);
