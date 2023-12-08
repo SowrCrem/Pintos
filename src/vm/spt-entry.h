@@ -28,8 +28,7 @@ enum page_type
 /* Represents an entry in the hash table for supplemental page table. */
 struct spt_entry
 {
-  // struct thread *owner;       /* Owning thread. */
-
+  
 	void *upage;                /* User virtual page. */
   enum page_type type;        /* Status of page initialisation type. */
 

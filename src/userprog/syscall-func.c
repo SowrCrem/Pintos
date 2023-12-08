@@ -276,21 +276,11 @@ write (int fd, const void *buffer, unsigned size)
 		/* Check page is writable if FD is not STDIN or STDOUT. */
 		if (!fd == STDIN_FILENO && !fd == STDOUT_FILENO)
 		{
-			// printf ("(write) checking page %d writeable\n", 
-			// 				pg_round_down (buffer + i));
-
 			void *upage = pg_round_down (buffer + i);
 			struct spt_entry *spte = spt_entry_lookup (upage);
 
-			// if (spte == NULL)
-			// {
-			// 	printf ("(write) ERROR: page %d not found\n", upage);
-			// 	terminate_userprog (ERROR);
-			// }
-
 			if (spte != NULL && !spte->writable)
 			{
-				// printf ("(write) ERROR: page %d not writable\n", upage);
 				terminate_userprog (ERROR);
 			}
 		}
