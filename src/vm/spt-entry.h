@@ -7,10 +7,12 @@
 #include "../threads/malloc.h"
 #include "../threads/thread.h"
 #include "../threads/vaddr.h"
+#include "../filesys/filesys.h"
 #include "../filesys/file.h"
 #include "../filesys/off_t.h"
-#include "userprog/pagedir.h"
-#include "vm/frame.h"
+#include "../userprog/pagedir.h"
+#include "../vm/mmap.h"
+#include "../vm/frame.h"
 
 /* Maximum stack size (8 MB). */
 #define MAX_STACK_SIZE (1 << 23)

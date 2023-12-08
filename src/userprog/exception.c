@@ -185,7 +185,7 @@ load_page_swap (struct spt_entry *spte)
 	/* Get new page of memory. */
 	lock_release (&vm_lock);
 	lock_acquire (&filesys_lock);
-	void* kpage = frame_allocate (PAL_USER | PAL_ZERO);
+		void* kpage = frame_allocate (PAL_USER | PAL_ZERO);
 	lock_release (&filesys_lock);
 	lock_acquire (&vm_lock);
 
@@ -202,7 +202,7 @@ load_page_swap (struct spt_entry *spte)
 	{
 		lock_release (&filesys_lock);
 		lock_acquire (&vm_lock);
-		frame_free (kpage);
+			frame_free (kpage);
 		lock_release (&vm_lock);
 		lock_acquire(&filesys_lock);
 		return false;

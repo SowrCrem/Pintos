@@ -801,7 +801,7 @@ lazy_load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		/* Insert new page entry into supplemental page table, if found is NULL. */
 		if (found == NULL)
 		{
-			struct spt_entry *spte = 
+			struct spt_entry *spte =
 				spt_entry_create (upage, FILESYSTEM, file, ofs, page_read_bytes, writable);
 
 			struct hash_elem *h = hash_insert (t->spage_table, &spte->elem);
@@ -829,7 +829,7 @@ lazy_load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		read_bytes -= page_read_bytes;
 		zero_bytes -= page_zero_bytes;
 		upage += PGSIZE;
-		ofs += PGSIZE;		/* CHECK IF IT IS page_read_bytes, not PGSIZE. */
+		ofs += PGSIZE;
 	}
 	return true;
 }
@@ -886,7 +886,7 @@ setup_stack (void **esp)
    Returns true on success, false if UPAGE is already mapped or
    if memory allocation fails. */
 bool
-	install_page (void *upage, void *kpage, bool writable)
+install_page (void *upage, void *kpage, bool writable)
 {
 	struct thread *t = thread_current ();
 

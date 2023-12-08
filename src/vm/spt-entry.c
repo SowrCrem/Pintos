@@ -1,5 +1,4 @@
 #include "../vm/spt-entry.h"
-#include "../vm/mmap.h"
 
 /* SUPPLEMENTAL PAGE TABLE STRUCT AND FUNCTIONS */
 
@@ -46,10 +45,10 @@ spt_entry_lookup (const void *upage)
 /* Create a new supplemental page table entry. */
 struct spt_entry *
 spt_entry_create (void *upage, enum page_type type, struct file *file, 
-            off_t ofs, size_t bytes, bool writable)
+                  off_t ofs, size_t bytes, bool writable)
 {
-  ASSERT (type == FILESYSTEM || type == STACK || type == MMAP);
   ASSERT (upage != NULL);
+  ASSERT (type == FILESYSTEM || type == STACK || type == MMAP);
 
   struct spt_entry *spte = malloc (sizeof (struct spt_entry));
   if (spte == NULL)
@@ -73,9 +72,10 @@ spt_entry_create (void *upage, enum page_type type, struct file *file,
 void
 spt_entry_delete (struct spt_entry *spte)
 {
+  ASSERT (spte != NULL);
+
   bool vm_lock_held = lock_held_by_current_thread (&vm_lock);
   bool filesys_lock_held = lock_held_by_current_thread (&filesys_lock);
-  ASSERT (spte != NULL);
 
   if (!filesys_lock_held)
     lock_acquire (&filesys_lock);
@@ -84,22 +84,22 @@ spt_entry_delete (struct spt_entry *spte)
   if (spte->type == MMAP && pagedir_is_dirty (thread_current ()->pagedir, spte->upage)) 
   {
     file_write_at (spte->file, spte->upage, spte->bytes, spte->ofs);
+    /* Memory mapped pages remain in memory even exiting process. */
   }
 
   if (!filesys_lock_held)
     lock_release (&filesys_lock);
 
-  
   if (!vm_lock_held)
     lock_acquire (&vm_lock);
 
-  frame_uninstall_page (spte->upage);
+  if (spte->swapped)
+    swap_drop (spte->swap_slot);
+  else
+    frame_uninstall_page (spte->upage);
 
   if (!vm_lock_held)
     lock_release (&vm_lock);
     
   free (spte);
-
-
-
 }

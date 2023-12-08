@@ -168,6 +168,7 @@ frame_allocate (enum palloc_flags flags)
       lock_acquire (&vm_lock);
 
     kpage = evict_frame ();
+
     if (!lock_held)
       lock_release (&vm_lock);
   }
@@ -250,7 +251,6 @@ frame_install_page (struct spt_entry *spte, void *kpage)
 
   if (success)
   {
-    
     /* Add entry to frame table. */
     struct ftable_entry *e = malloc (sizeof (struct ftable_entry));
     if (e == NULL)
@@ -287,18 +287,15 @@ frame_remove_all (struct thread *thread)
   bool vm_lock_held = lock_held_by_current_thread (&vm_lock);
 
   if (filesys_lock_held)
-  {
     lock_release (&filesys_lock);
-  }
+
   /* Initialise list of frames to remove from frame table */
-  list_init (&to_remove);
   if (!vm_lock_held)
-  {
     lock_acquire (&vm_lock);
-  }
 
   /* Initialise iterator to traverse through hash table to evict frames when
      its thread owner exits. */
+  list_init (&to_remove);
   hash_first (&exit_iterator, &frame_table);
   while (hash_next (&exit_iterator))
   {
@@ -306,9 +303,7 @@ frame_remove_all (struct thread *thread)
             struct ftable_entry, elem);
     /* If the thread that owns the frame matches the exiting thread then add to the list */
     if (frame_to_evict->owner == thread)
-    {
       list_push_back (&to_remove, &frame_to_evict->eviction_elem);
-    }
   }
 
   /* Iterate through list of frames to evict, and remove from global frame table. */
@@ -321,13 +316,8 @@ frame_remove_all (struct thread *thread)
   }
 
   if (!vm_lock_held)
-  {
     lock_release (&vm_lock);
-  }
 
   if (filesys_lock_held)
-  {
     lock_acquire (&filesys_lock);
-  }
-
 }

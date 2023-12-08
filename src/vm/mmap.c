@@ -81,8 +81,12 @@ mmap_destroy (struct file_entry *f)
 
   if (f->file == NULL)
   {
-    /* If the memory-mapped file is anonymous delete the file_entry from the file_table */
-    hash_delete (&thread_current ()->rs_manager->file_table, &f->file_elem);
+    struct rs_manager *rs_m = thread_current ()->rs_manager;
+    /* If the memory-mapped file is anonymous delete the file_entry from 
+       the file_table */
+    lock_acquire (&rs_m->file_table_lock);
+      hash_delete (&rs_m->file_table, &f->file_elem);
+    lock_release (&rs_m->file_table_lock);
     free (f);
   }
   else
@@ -118,19 +122,19 @@ uninstall_existing_pages (struct spt_entry *first_page)
       Free the supplemental page entry. */
   while (entry != NULL && entry->file == file_mapped && entry->type == MMAP)
   {
-      if (!vm_lock_held)
-        lock_release (&vm_lock);
+    if (!vm_lock_held)
+      lock_release (&vm_lock);
 
-      lock_acquire (&filesys_lock);
+    lock_acquire (&filesys_lock);
+    
+    /* Update changes to file system if page is dirty. */
+    if (pagedir_is_dirty (thread_current ()->pagedir, upage))
+      file_write_at (entry->file, entry->upage, entry->bytes, entry->ofs);
       
-      /* Update changes to file system if page is dirty. */
-      if (pagedir_is_dirty (thread_current ()->pagedir, upage))
-        file_write_at (entry->file, entry->upage, entry->bytes, entry->ofs);
-        
-      lock_release (&filesys_lock);
+    lock_release (&filesys_lock);
 
-      if (!vm_lock_held)
-        lock_acquire (&vm_lock);
+    if (!vm_lock_held)
+      lock_acquire (&vm_lock);
 
     /* Remove page from the supplemental page table. */
     hash_delete (spt, &entry->elem);
@@ -147,7 +151,7 @@ uninstall_existing_pages (struct spt_entry *first_page)
     lock_release (&vm_lock);
 
   lock_acquire (&filesys_lock);
-  file_close (file_mapped);
+    file_close (file_mapped);
   lock_release (&filesys_lock);
 
   if (!vm_lock_held)
