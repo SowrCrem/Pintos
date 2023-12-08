@@ -29,7 +29,6 @@ mmap_create (struct file_entry *file_entry, void *start)
   struct spte_entry *first_page = NULL;
 
   /* Check address is page aligned - if not return error. */
-  // printf ("About to enter the loop.\n");
   while (read_bytes > 0)
   {
     /* Initialise temporary variable (no of bytes to be read from exec file).*/

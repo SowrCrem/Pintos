@@ -56,8 +56,6 @@ frame_init (void)
 static void
 init_iterator (void)
 {
-  // ASSERT (lock_held_by_current_thread (&vm_lock));
-  // printf ("(init_iterator) Enters into interator again.\n");
   /* Initialise iterator if not already initialised. */
   static bool is_initialised = false;
   if (!is_initialised)

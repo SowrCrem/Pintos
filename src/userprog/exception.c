@@ -274,7 +274,6 @@ page_fault (struct intr_frame *f)
 	not_present = (f->error_code & PF_P) == 0;
 	user = (f->error_code & PF_U) != 0;
 
-	// printf ("\n(page-fault) fault_addr: %d\n", fault_addr);
 #ifdef USERPROG
 	#ifdef VM
 	void *fault_upage = pg_round_down (fault_addr);
@@ -288,7 +287,6 @@ page_fault (struct intr_frame *f)
 	{
 		/* Look up address in supplemental page table. */
 
-		// struct spt_entry *spte = spt_entry_lookup (upage);
 		struct spt_entry spte;
 		spte.upage = fault_upage; 
 		struct hash_elem *h = hash_find (thread_current ()->spage_table, &spte.elem);
@@ -355,12 +353,10 @@ page_fault (struct intr_frame *f)
 		if (fault_addr >= esp || fault_addr == esp - PUSHA_BYTES_BELOW 
 				|| fault_addr == esp - PUSH_BYES_BELOW) 
 		{
-			//printf ("inside valid stack growth condition\n");
 
 			/* Check stack will not exceed MAX_STACK_SIZE. */
 			if (PHYS_BASE - fault_upage <= MAX_STACK_SIZE) 
 			{
-				//printf ("Passed max stack size check and is_user_vaddr check\n");
 
 				/* Add new stack page to supplemental page table. */
 				struct spt_entry *spte = 
@@ -401,22 +397,8 @@ page_fault (struct intr_frame *f)
 						return;
 					}
 				}
-			  // else
-				// {
-				// 	/* Frame allocation failed. */
-				// 	PANIC ("frame allocation unsuccessful");
-				// }
 			} 
-			// else 
-			// {
-			// 	/* Stack too large. */
-			// 	PANIC ("stack too large");
-			// }
 		}
-		// else
-		// {
-		// 	PANIC ("invalid fault address");
-		// }
 	}
 
 	#endif

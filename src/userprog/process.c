@@ -109,18 +109,14 @@ file_table_destroy_func (struct hash_elem *e_, void *aux UNUSED)
   struct file_entry *e = hash_entry (e_, struct file_entry, file_elem);
   
   struct lock *fd_lock = &thread_current ()->rs_manager->file_table_lock;
-//   bool fd_lock_held = lock_held_by_current_thread (fd_lock);
   bool filesys_lock_held = lock_held_by_current_thread (&filesys_lock);
 
-//   if (fd_lock_held)
-// 	lock_release (fd_lock);
   if (!filesys_lock_held)
   	lock_acquire (&filesys_lock);
   file_close (e->file);
   if (!filesys_lock_held)
   	lock_release (&filesys_lock);
-//   if (fd_lock_held)
-// 	lock_acquire (fd_lock);
+
   free (e);
 }
 
@@ -271,21 +267,8 @@ process_resource_free (struct thread *t)
 	bool filesys_lock_held = lock_held_by_current_thread (&filesys_lock);
 	bool fd_lock_held = lock_held_by_current_thread (&rs->file_table_lock);
 
-	
-	// if (!filesys_lock_held)
-	// 	lock_acquire (&filesys_lock);
-
-
-	// if (!filesys_lock_held)
-	// 	lock_release (&filesys_lock);
-
-	// if (!fd_lock_held)
-	// 	lock_acquire (&rs->file_table_lock);
-
 	hash_destroy (&rs->file_table, &file_table_destroy_func);
 
-	// if (!fd_lock_held)
-	// 	lock_release (&rs->file_table_lock);
 	if (!filesys_lock_held)
 		lock_acquire (&filesys_lock);
 
@@ -647,7 +630,6 @@ load (const char *file_name, void (**eip) (void), void **esp)
 	}
 
 	/* Deny writes to open file. */
-	// file_deny_write (file);
 
 	/* Read and verify executable header. */
 	if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
