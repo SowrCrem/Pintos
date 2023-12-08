@@ -274,7 +274,7 @@ write (int fd, const void *buffer, unsigned size)
 		}
 
 		/* Check page is writable if FD is not STDIN or STDOUT. */
-		if (!(fd == STDIN_FILENO) && !(fd == STDOUT_FILENO))
+		if (!fd == STDIN_FILENO && !fd == STDOUT_FILENO)
 		{
 			// printf ("(write) checking page %d writeable\n", 
 			// 				pg_round_down (buffer + i));

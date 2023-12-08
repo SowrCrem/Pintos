@@ -16,11 +16,10 @@ mmap_create (struct file_entry *file_entry, void *start)
   /* Obtain a separate and independent reference to the file for each of its mappings. */
   lock_acquire (&filesys_lock);
 
-      struct file *file = file_reopen (file_entry->file);
-      int read_bytes = (int) file_length (file);
+    struct file *file = file_reopen (file_entry->file);
+    int read_bytes = (int) file_length (file);
 
   lock_release (&filesys_lock);
-
 
   int ofs = 0;
 
@@ -38,7 +37,6 @@ mmap_create (struct file_entry *file_entry, void *start)
 
     /* Check if virtual page already allocated for the file */
     struct spt_entry *s_find = spt_entry_lookup (upage);
- 
 
     /* Checks if mapping would overwrite in a space reserved for the stack. */
     bool space_reserved_for_stack = (upage <= PHYS_BASE - MAX_STACK_SIZE); 
@@ -46,7 +44,6 @@ mmap_create (struct file_entry *file_entry, void *start)
     {
       return ERROR;
     }
-
 
     if (s_find == NULL)
     {
@@ -78,7 +75,6 @@ mmap_create (struct file_entry *file_entry, void *start)
 void 
 mmap_destroy (struct file_entry *f)
 {
-
   uninstall_existing_pages (f->mapping);
 
   if (f->file == NULL)
@@ -88,7 +84,6 @@ mmap_destroy (struct file_entry *f)
   }
   else
     f->mapping = NULL; 
-  
 }
 
 
@@ -111,7 +106,6 @@ uninstall_existing_pages (struct spt_entry *first_page)
 
   bool vm_lock_held = lock_held_by_current_thread (&vm_lock);
 
-
   if (!vm_lock_held)
     lock_acquire (&vm_lock);
 
@@ -120,7 +114,6 @@ uninstall_existing_pages (struct spt_entry *first_page)
       Free the supplemental page entry. */
   while (entry != NULL && entry->file == file_mapped && entry->type == MMAP)
   {
-
       if (!vm_lock_held)
         lock_release (&vm_lock);
 
@@ -139,7 +132,6 @@ uninstall_existing_pages (struct spt_entry *first_page)
     hash_delete (spt, &entry->elem);
     
     /* Remove page from frame table. */
-
     spt_entry_delete (entry);
     
     /* Update pointers to progress through user virtual memory. */
