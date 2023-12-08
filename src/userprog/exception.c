@@ -332,7 +332,9 @@ page_fault (struct intr_frame *f)
 		/* Page must not be found in SPT, therefore, we must check for 
 			 stack growth. */
 
-		/* Check if fault address is within 32 bytes of stack pointer. */
+		/* Check if fault address is either at or above esp, 
+		   at 4 bytes below esp or at 32 bytes below esp 
+		   corresponding to the PUSH and PUSHA commands */
 		if (fault_addr >= esp || fault_addr == esp - PUSHA_BYTES_BELOW 
 				|| fault_addr == esp - PUSH_BYES_BELOW) 
 		{

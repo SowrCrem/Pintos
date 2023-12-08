@@ -72,17 +72,21 @@ mmap_create (struct file_entry *file_entry, void *start)
   return (mapid_t) file_entry->fd;
 }
 
+/* Function to clear resources associated with given memory-mapped file */
 void 
 mmap_destroy (struct file_entry *f)
 {
+  /* Uninstall existing pages associated with the memory-mapped file */
   uninstall_existing_pages (f->mapping);
 
   if (f->file == NULL)
   {
+    /* If the memory-mapped file is anonymous delete the file_entry from the file_table */
     hash_delete (&thread_current ()->rs_manager->file_table, &f->file_elem);
     free (f);
   }
   else
+  /* If the file is associated with a regular file, the memory-mapped file should no longer be active */
     f->mapping = NULL; 
 }
 

@@ -283,7 +283,6 @@ frame_install_page (struct spt_entry *spte, void *kpage)
 void 
 frame_remove_all (struct thread *thread)
 {
-  // ASSERT (!lock_held_by_current_thread (&filesys_lock));
   bool filesys_lock_held = lock_held_by_current_thread (&filesys_lock);
   bool vm_lock_held = lock_held_by_current_thread (&vm_lock);
 
@@ -291,6 +290,7 @@ frame_remove_all (struct thread *thread)
   {
     lock_release (&filesys_lock);
   }
+  /* Initialise list of frames to remove from frame table */
   list_init (&to_remove);
   if (!vm_lock_held)
   {
@@ -304,7 +304,7 @@ frame_remove_all (struct thread *thread)
   {
     struct ftable_entry *frame_to_evict = hash_entry (hash_cur (&exit_iterator),
             struct ftable_entry, elem);
-
+    /* If the thread that owns the frame matches the exiting thread then add to the list */
     if (frame_to_evict->owner == thread)
     {
       list_push_back (&to_remove, &frame_to_evict->eviction_elem);
